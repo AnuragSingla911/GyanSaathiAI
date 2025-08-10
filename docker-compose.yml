@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for user data
+  postgres:
+    image: postgres:15
+    container_name: tutor_postgres
+    environment:
+      POSTGRES_DB: tutor_db
+      POSTGRES_USER: tutor_user
+      POSTGRES_PASSWORD: tutor_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - tutor_network
+
+  # MongoDB for generated content
+  mongodb:
+    image: mongo:7
+    container_name: tutor_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: tutor_content
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - tutor_network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tutor_backend
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: tutor_db
+      DB_USER: tutor_user
+      DB_PASSWORD: tutor_password
+      MONGODB_URI: mongodb://admin:admin123@mongodb:27017/tutor_content?authSource=admin
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      ML_SERVICE_URL: http://ml-service:8001
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+      - mongodb
+      - ml-service
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - tutor_network
+
+  # ML Service for AI content generation
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: tutor_ml_service
+    environment:
+      PYTHONPATH: /app
+      MODEL_PATH: /app/models
+      HUGGINGFACE_CACHE: /app/cache
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./ml-service:/app
+      - ml_models:/app/models
+      - ml_cache:/app/cache
+    networks:
+      - tutor_network
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tutor_frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:5000/api
+      REACT_APP_ML_SERVICE_URL: http://localhost:8001
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - tutor_network
+
+  # Redis for caching (optional but recommended)
+  redis:
+    image: redis:7-alpine
+    container_name: tutor_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - tutor_network
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  ml_models:
+  ml_cache:
+  redis_data:
+
+networks:
+  tutor_network:
+    driver: bridge
