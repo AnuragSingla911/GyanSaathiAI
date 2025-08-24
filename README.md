@@ -1,21 +1,92 @@
 # AI Tutor - Interview-Ready Demo
 
-A complete AI-powered tutoring platform built with React, Node.js, Python LangChain/LangGraph, PostgreSQL, MongoDB, and Redis - all packaged in a single Docker container for easy deployment.
+A complete AI-powered tutoring platform built with React, Node.js, Python LangChain/LangGraph, PostgreSQL, MongoDB, and Redis - all packaged in Docker containers for easy deployment.
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
+### **High-Level Architecture**
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Frontend      │    │    Backend      │    │   Agent         │
-│   (React)       │◄──►│   (Node.js)     │◄──►│   (Python)      │
-│   Nginx:80      │    │   Express:5000  │    │   FastAPI:8000  │
+│   (React)       │◄──►│   (Node.js)     │    │   (Python)      │
+│   Port: 3000    │    │   Port: 5000    │    │   Port: 8000    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   PostgreSQL    │    │   MongoDB       │    │   Redis         │
-│   (Main DB)     │    │   (Questions)   │    │   (Cache)       │
+│   Nginx         │    │   PostgreSQL    │    │   MongoDB       │
+│   (Proxy)       │    │   (Main DB)     │    │   (Questions)   │
+│   Port: 80      │    │   Port: 5432    │    │   Port: 27017   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+**Note**: 
+- **Backend ↔ Agent**: No direct communication
+- **Backend → MongoDB**: Fetches questions for students
+- **Agent → MongoDB**: Saves generated questions
+- **Backend → Redis**: User session validation and caching
+- **Agent → PostgreSQL**: RAG vector database (pgvector)
+
+### **Data Flow Architecture**
+
+#### **1. Content Ingestion Flow (Admin)**
+```
+Agent Service → Ingest Endpoint → RAG Vector Database (PostgreSQL + pgvector)
+     │
+     ├── /ingestSampleCorpus (populates sample data)
+     ├── /ingestEmbedding (adds custom documents)
+     └── Creates embeddings using OpenAI text-embedding-3-small
+```
+
+#### **2. Question Generation Flow (Admin)**
+```
+Agent Service → Generate Question → RAG Retrieval → LLM Processing → MongoDB Storage
+     │
+     ├── /admin/generate/question
+     ├── RAG finds relevant content chunks
+     ├── LLM (GPT-4) generates question
+     ├── Validation pipeline runs
+     └── Question saved to MongoDB questions collection
+```
+
+#### **3. Student Access Flow**
+```
+Student Frontend → Nginx → Backend API → Database Queries
+     │
+     ├── Login: PostgreSQL users table + Redis cache
+     ├── Fetch Questions: MongoDB questions collection
+     ├── Save Progress: PostgreSQL progress tables
+     └── Quiz Attempts: PostgreSQL quiz_attempts table
+```
+
+### **Detailed Component Interactions**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              STUDENT FLOW                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Frontend → Nginx:80 → Backend:5000 → PostgreSQL (users, progress)        │
+│                    → MongoDB (questions)                                  │
+│                    → Redis (user cache, sessions)                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              ADMIN FLOW                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Agent:8000 → RAG Vector Store (PostgreSQL + pgvector)                     │
+│           → OpenAI Embeddings (text-embedding-3-small)                    │
+│           → LLM Processing (GPT-4)                                        │
+│           → MongoDB (questions collection)                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              DATA STORES                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PostgreSQL: users, quiz_attempts, progress_summary, corpus_documents      │
+│ MongoDB: questions (versioned, immutable)                                 │
+│ Redis: user sessions, progress cache, rate limiting                       │
+│ pgvector: document embeddings for semantic search                         │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 🚀 Quick Start
@@ -23,51 +94,79 @@ A complete AI-powered tutoring platform built with React, Node.js, Python LangCh
 ### Prerequisites
 - Docker Desktop installed and running
 - 8GB+ RAM recommended
-- Port 80 available
+- Ports 80, 5000, 8000 available
 
 ### Build and Run
 ```bash
 # Clone and navigate to the repository
 cd Ai-Tutor
 
-# Build the container (includes all services)
-./build.sh
+# Start all services
+docker-compose up -d
 
-# Run the container
-docker run -d -p 80:80 --name ai-tutor ai-tutor:latest
-
-# Check health
-curl http://localhost/api/v1/health
+# Check health of all services
+curl http://localhost/api/v1/health          # Backend health
+curl http://localhost:8000/health            # Agent health
+curl http://localhost                         # Frontend (via nginx)
 ```
 
 ### Access Points
-- **Frontend**: http://localhost
-- **Backend API**: http://localhost/api
-- **Agent API**: http://localhost/agent  
-- **Health Check**: http://localhost/api/v1/health
+- **Frontend**: http://localhost (via nginx)
+- **Backend API**: http://localhost:5000/api
+- **Agent API**: http://localhost:8000
+- **Health Check**: http://localhost:5000/api/v1/health
 
 ## 📋 Features
 
 ### 🎓 Educational Features
 - **Adaptive Quiz Generation**: AI-powered questions based on subject, topic, and difficulty
 - **Real-time Progress Tracking**: Mastery levels, streaks, and detailed analytics
-- **Multi-subject Support**: Math, Science, and extensible to other subjects
+- **Multi-subject Support**: Math, Science, History, English and extensible to other subjects
 - **Intelligent Grading**: Automatic scoring with detailed feedback
 
 ### 🔧 Technical Features
-- **Single Container Deployment**: All services in one Docker image
-- **Microservices Architecture**: Separate concerns for scalability
+- **Microservices Architecture**: Separate services for scalability
 - **RAG-Powered Content**: Retrieval-augmented generation for grounded questions
 - **LangGraph Workflows**: Sophisticated AI pipelines with validation
 - **Real-time Analytics**: Background processing with Redis queues
 - **JWT Authentication**: Secure user management with RBAC
+- **Vector Search**: pgvector for semantic content retrieval
 
 ## 🎯 API Documentation
 
-### Authentication
+### **Agent Service (Question Generation)**
 ```bash
-# Register
-curl -X POST http://localhost/api/v1/auth/register \
+# Ingest sample corpus
+curl -X POST "http://localhost:8000/ingestSampleCorpus"
+
+# Generate question
+curl -X POST "http://localhost:8000/admin/generate/question" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "math",
+    "topic": "linear equations",
+    "class_level": "8",
+    "difficulty": "medium",
+    "question_type": "multiple_choice"
+  }'
+
+# Ingest custom document
+curl -X POST "http://localhost:8000/ingestEmbedding" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Your document content here...",
+    "metadata": {
+      "subject": "math",
+      "class": "9",
+      "chapter": "Algebra"
+    }
+  }'
+```
+
+### **Backend Service (Student Management)**
+```bash
+# Student Registration
+curl -X POST "http://localhost:5000/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "student1",
@@ -75,209 +174,148 @@ curl -X POST http://localhost/api/v1/auth/register \
     "password": "password123",
     "firstName": "John",
     "lastName": "Doe",
-    "gradeLevel": 9
+    "gradeLevel": 8,
+    "preferredSubjects": ["math", "science"]
   }'
 
-# Login
-curl -X POST http://localhost/api/v1/auth/login \
+# Student Login
+curl -X POST "http://localhost:5000/api/v1/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "student@example.com",
     "password": "password123"
   }'
-```
 
-### Quiz Flow
-```bash
-# Start quiz attempt
-curl -X POST http://localhost/api/v1/quiz-attempts \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "subject": "math",
-    "topic": "algebra",
-    "totalQuestions": 5
-  }'
-
-# Save answer
-curl -X PUT http://localhost/api/v1/quiz-attempts/{attemptId}/items/{itemId} \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: unique-key" \
-  -d '{
-    "answer": "Option A",
-    "timeSpent": 30
-  }'
-
-# Submit quiz
-curl -X POST http://localhost/api/v1/quiz-attempts/{attemptId}/submit \
+# Fetch Questions
+curl -X GET "http://localhost:5000/api/v1/questions/generate?subject=math&topic=algebra&limit=5" \
   -H "Authorization: Bearer <token>"
-```
-
-### AI Question Generation
-```bash
-# Generate question using agent
-curl -X POST http://localhost/agent/generate/question \
-  -H "Content-Type: application/json" \
-  -d '{
-    "subject": "math",
-    "class_level": "9",
-    "topic": "quadratic equations",
-    "difficulty": "medium",
-    "question_type": "multiple_choice"
-  }'
 ```
 
 ## 🗄️ Database Schema
 
-### PostgreSQL Tables
-- **users**: User accounts and profiles
-- **quiz_attempts**: Quiz session metadata
+### **PostgreSQL (Main Database)**
+- **users**: User accounts, profiles, and authentication
+- **user_preferences**: Student subject preferences and settings
+- **quiz_attempts**: Quiz session metadata and progress
 - **attempt_items**: Individual question responses with immutable snapshots
 - **progress_summary**: Precomputed progress by user/subject/skill
-- **corpus_documents**: RAG content sources
-- **corpus_chunks**: Searchable content chunks
+- **langchain_pg_collection**: RAG collection metadata
+- **langchain_pg_embedding**: Document embeddings for vector search
 
-### MongoDB Collections
+### **MongoDB (Question Storage)**
 - **questions**: Versioned question content (immutable once active)
+- **Structure**: questionText, options, correctAnswer, explanation, metadata
+
+### **Redis (Caching & Sessions)**
+- **user sessions**: Authentication tokens and user data
+- **progress cache**: Fast access to user progress
+- **rate limiting**: API request throttling
 
 ## 🔬 Testing the System
 
-### 1. User Registration and Login
+### **1. Setup Corpus and Generate Questions**
 ```bash
-# Create a user account and get token for subsequent requests
+# 1. Ingest sample corpus
+curl -X POST "http://localhost:8000/ingestSampleCorpus"
+
+# 2. Generate a question
+curl -X POST "http://localhost:8000/admin/generate/question" \
+  -H "Content-Type: application/json" \
+  -d '{"subject": "math", "topic": "linear equations", "class_level": "8"}'
 ```
 
-### 2. Admin Question Management
+### **2. Create Student Account**
 ```bash
-# Create questions (admin only)
-curl -X POST http://localhost/api/v1/questions \
-  -H "Authorization: Bearer <admin-token>" \
+# Register student
+curl -X POST "http://localhost:5000/api/auth/register" \
   -H "Content-Type: application/json" \
-  -d '{
-    "subject": "math",
-    "topic": "algebra",
-    "content": {
-      "stem": "Solve for x: 2x + 3 = 7",
-      "options": [
-        {"id": "a", "text": "x = 1"},
-        {"id": "b", "text": "x = 2"},
-        {"id": "c", "text": "x = 3"},
-        {"id": "d", "text": "x = 4"}
-      ],
-      "correctOptionIds": ["b"]
-    }
-  }'
-
-# Promote to active
-curl -X POST http://localhost/api/v1/questions/{id}/promote \
-  -H "Authorization: Bearer <admin-token>"
+  -d '{"username": "test_student", "email": "test@example.com", "password": "password123", "firstName": "Test", "lastName": "Student", "gradeLevel": 8, "preferredSubjects": ["math"]}'
 ```
 
-### 3. Complete Quiz Flow
-1. Start attempt → Get attemptId
-2. Retrieve questions → Get itemIds  
-3. Answer questions → Save responses
-4. Submit attempt → Get final score
-5. View progress → See updated mastery
-
-### 4. AI Generation
+### **3. Test Student Login and Question Access**
 ```bash
-# Test the agent's question generation
-curl -X POST http://localhost/agent/generate/question \
+# Login and get token
+TOKEN=$(curl -s -X POST "http://localhost:5000/api/v1/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{
-    "subject": "science",
-    "topic": "photosynthesis", 
-    "difficulty": "easy",
-    "question_type": "multiple_choice"
-  }'
+  -d '{"email": "test@example.com", "password": "password123"}' | jq -r '.data.token')
+
+# Fetch questions
+curl -X GET "http://localhost:5000/api/v1/questions/generate?subject=math&topic=algebra&limit=3" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## 🛠️ Development
 
-### Project Structure
+### **Project Structure**
 ```
 Ai-Tutor/
-├── backend/           # Node.js API server
+├── backend/           # Node.js API server (Student management)
 │   ├── src/
 │   │   ├── routes/v1/ # V1 API endpoints
 │   │   ├── models/    # Data models
 │   │   └── services/  # Business logic
 │   └── migrations/    # Database schema
-├── frontend/          # React application  
+├── frontend/          # React application (Student interface)
 │   └── src/
-├── agent/             # Python LangChain service
-│   └── src/
-│       ├── services/  # LangGraph workflows
-│       └── models/    # Pydantic schemas
-└── ops/               # Container configuration
-    ├── nginx/         # Reverse proxy config
-    └── supervisor/    # Process management
+├── agent/             # Python LangChain service (AI generation)
+│   ├── src/
+│   │   ├── services/  # RAG, question generation
+│   │   └── models/    # Pydantic schemas
+│   └── data/          # Sample corpus data
+├── ops/               # Container configuration
+│   ├── nginx/         # Reverse proxy config
+│   └── supervisor/    # Process management
+└── docker-compose.yml # Service orchestration
 ```
 
-### Key Features Implemented
+### **Key Data Flows Implemented**
 
-✅ **Single Container**: All services + databases in one image  
-✅ **JWT Authentication**: Secure user management with roles  
-✅ **Quiz Engine**: Complete attempt flow with immutable snapshots  
-✅ **Progress Tracking**: Background workers with Redis queues  
-✅ **AI Generation**: LangGraph pipeline with validators  
-✅ **RAG Integration**: Content retrieval for grounded questions  
-✅ **Observability**: Tracing and health checks  
-✅ **API Documentation**: OpenAPI spec with full endpoint coverage  
-
-### Non-Functional Targets Met
-- Answer save p95 < 150ms (optimized with caching)
-- Progress view p95 < 300ms (precomputed summaries)  
-- Agent validation > 70% pass rate (comprehensive validators)
-- Math solver > 98% accuracy (SymPy integration)
-- < 10% duplicate questions (deduplication validator)
+✅ **Content Ingestion**: Agent → RAG Vector Database (PostgreSQL + pgvector)  
+✅ **Question Generation**: Agent → RAG Retrieval → LLM → MongoDB  
+✅ **Student Access**: Frontend → Nginx → Backend → PostgreSQL/MongoDB/Redis  
+✅ **Authentication**: JWT tokens with Redis caching  
+✅ **RAG Integration**: Semantic search with OpenAI embeddings  
+✅ **AI Pipeline**: LangGraph workflow with validation  
 
 ## 🔍 Monitoring
 
-### Health Checks
+### **Health Checks**
 ```bash
-# Overall system health
-curl http://localhost/api/v1/health
+# Backend health
+curl http://localhost:5000/api/v1/health
 
-# Agent service health  
-curl http://localhost/agent/health
+# Agent health  
+curl http://localhost:8000/health
 
-# Progress queue health (admin)
-curl http://localhost/api/v1/progress/queue-health \
-  -H "Authorization: Bearer <admin-token>"
+# Frontend (via nginx)
+curl http://localhost
 ```
 
-### Logs
+### **Service Status**
 ```bash
-# View all service logs
-docker logs -f ai-tutor
+# Check all services
+docker-compose ps
 
-# Check specific processes
-docker exec ai-tutor supervisorctl status
+# View logs
+docker-compose logs -f
+
+# Check specific service
+docker-compose logs agent
 ```
 
 ## 🚢 Production Considerations
 
 For production deployment:
 
-1. **Environment Variables**: Set secure JWT secrets, API keys
+1. **Environment Variables**: Set secure JWT secrets, OpenAI API keys
 2. **Data Persistence**: Mount volumes for database data
-3. **Scaling**: Extract services to separate containers
-4. **Security**: Enable TLS, update dependencies
+3. **Scaling**: Scale individual services independently
+4. **Security**: Enable TLS, update dependencies, network policies
 5. **Monitoring**: Add external observability stack
 
 ```bash
-# Production run with data persistence
-docker run -d \
-  -p 80:80 \
-  -v ai-tutor-postgres:/var/lib/postgresql/data \
-  -v ai-tutor-mongo:/var/lib/mongodb \
-  -e JWT_SECRET="production-secret" \
-  -e OPENAI_API_KEY="your-key" \
-  --name ai-tutor \
-  ai-tutor:latest
+# Production with data persistence
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 ## 📝 License
