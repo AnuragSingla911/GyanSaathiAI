@@ -102,10 +102,12 @@ update OPENAI_API_KEY in .env file
 docker-compose up -d
 
 # Check health of all services
-curl http://localhost/api/v1/health          # Backend health
-curl http://localhost:8000/health            # Agent health
-curl http://localhost                         # Frontend (via nginx)
+curl http://localhost:5000/api/v1/health          # Backend health
+curl http://localhost:8000/health                  # Agent health
+curl http://localhost                             # Frontend (via nginx)
 ```
+
+**📖 For detailed setup instructions, see [SETUP.md](SETUP.md)**
 
 ### Access Points
 - **Frontend**: http://localhost (via nginx)
