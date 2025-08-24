@@ -31,7 +31,7 @@ install:
 	npm install
 	cd backend && npm install
 	cd frontend && npm install
-	cd ml-service && pip install -r requirements.txt
+	cd agent && pip install -r requirements.txt
 
 dev:
 	@echo "Starting development servers..."
@@ -46,21 +46,21 @@ test:
 	@echo "Running tests..."
 	cd backend && npm test
 	cd frontend && npm test
-	cd ml-service && python -m pytest
+	cd agent && python -m pytest
 
 lint:
 	@echo "Running linters..."
 	cd backend && npm run lint
 	cd frontend && npm run lint
-	cd ml-service && flake8 src/
+	cd agent && flake8 src/
 
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf frontend/dist
 	rm -rf backend/dist
 	rm -rf */node_modules
-	rm -rf ml-service/__pycache__
-	rm -rf ml-service/.pytest_cache
+	rm -rf agent/__pycache__
+	rm -rf agent/.pytest_cache
 
 # Docker commands
 docker-build:

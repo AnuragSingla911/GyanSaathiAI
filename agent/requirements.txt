@@ -1,0 +1,30 @@
+# Core FastAPI and server
+fastapi
+uvicorn[standard]
+
+# LangChain ecosystem
+langchain
+langgraph
+langchain-openai
+langchain-community
+
+# Pydantic and settings
+pydantic
+pydantic-settings
+sqlalchemy
+
+# HTTP client
+httpx
+
+# Database drivers
+psycopg2-binary
+pgvector
+pymongo
+redis
+
+# OpenAI integration
+openai
+
+# Basic utilities
+numpy
+sympy

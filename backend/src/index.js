@@ -10,11 +10,14 @@ const { connectPostgres } = require('./utils/database');
 const { connectMongoDB } = require('./utils/mongodb');
 const { connectRedis } = require('./utils/redis');
 const errorHandler = require('./middleware/errorHandler');
+// const traceMiddleware = require('./middleware/trace');
+
+// Route imports (using original routes temporarily)
 const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const quizRoutes = require('./routes/quizzes');
-const progressRoutes = require('./routes/progress');
-const contentRoutes = require('./routes/content');
+// const questionRoutes = require('./routes/v1/questions');
+// const quizRoutes = require('./routes/v1/quiz-attempts');
+// const progressRoutes = require('./routes/v1/progress');
+// const healthRoutes = require('./routes/v1/health');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -24,14 +27,14 @@ app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? process.env.FRONTEND_URL 
-    : ['http://localhost:3000', 'http://localhost:3001'],
+    : ['http://localhost:3000', 'http://localhost:80', 'http://localhost'],
   credentials: true
 }));
 
-// Rate limiting
+// Global rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
@@ -42,22 +45,15 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV
-  });
-});
+// Tracing middleware (temporarily disabled)
+// app.use(traceMiddleware);
 
-// API routes
+// API routes (simplified for now)
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/quizzes', quizRoutes);
-app.use('/api/progress', progressRoutes);
-app.use('/api/content', contentRoutes);
+app.use('/api/content', require('./routes/content'));
+app.use('/api/quizzes', require('./routes/quizzes'));
+app.use('/api/progress', require('./routes/progress'));
+app.use('/api/users', require('./routes/users'));
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -81,9 +77,9 @@ async function startServer() {
     console.log('✅ All database connections established');
     
     // Start server
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
-      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+      console.log(`📊 Health check: http://localhost:${PORT}/api/v1/health`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);

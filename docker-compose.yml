@@ -1,9 +1,9 @@
-version: '3.8'
+# Docker Compose file for AI Tutor
 
 services:
-  # PostgreSQL Database for user data
+  # PostgreSQL Database for user data, quiz attempts, progress, and RAG corpus
   postgres:
-    image: postgres:15
+    image: pgvector/pgvector:pg16 # Use pgvector image with PostgreSQL 16
     container_name: tutor_postgres
     environment:
       POSTGRES_DB: tutor_db
@@ -16,15 +16,19 @@ services:
       - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - tutor_network
+    command: >
+      postgres -c shared_preload_libraries=vector
+      -c log_statement=all
+      -c log_destination=stderr
 
-  # MongoDB for generated content
+  # MongoDB for versioned questions and content
   mongodb:
     image: mongo:7
     container_name: tutor_mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: admin123
-      MONGO_INITDB_DATABASE: tutor_content
+      MONGO_INITDB_DATABASE: aitutor
     ports:
       - "27017:27017"
     volumes:
@@ -32,7 +36,19 @@ services:
     networks:
       - tutor_network
 
-  # Backend API
+  # Redis for caching, sessions, and background job queues
+  redis:
+    image: redis:7-alpine
+    container_name: tutor_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - tutor_network
+    command: redis-server --appendonly yes
+
+  # Backend API with v1 routes, auth, and progress tracking
   backend:
     build:
       context: ./backend
@@ -48,38 +64,62 @@ services:
       DB_PASSWORD: tutor_password
       MONGODB_URI: mongodb://admin:admin123@mongodb:27017/tutor_content?authSource=admin
       JWT_SECRET: your-super-secret-jwt-key-change-in-production
-      ML_SERVICE_URL: http://ml-service:8001
+      ML_SERVICE_URL: http://agent:8000
       REDIS_URL: redis://redis:6379
     ports:
       - "5000:5000"
     depends_on:
       - postgres
       - mongodb
-      - ml-service
+      - redis
     volumes:
       - ./backend:/app
       - /app/node_modules
     networks:
       - tutor_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # ML Service for AI content generation
-  ml-service:
+  # Python AI Agent Service with LangChain/LangGraph
+  agent:
     build:
-      context: ./ml-service
+      context: ./agent
       dockerfile: Dockerfile
-    container_name: tutor_ml_service
+    container_name: tutor_agent
+    env_file:
+      - .env
     environment:
       PYTHONPATH: /app
-      MODEL_PATH: /app/models
-      HUGGINGFACE_CACHE: /app/cache
+      # Database connection strings
+      POSTGRES_URL: postgresql://tutor_user:tutor_password@postgres:5432/tutor_db
+      MONGO_URL: mongodb://admin:admin123@mongodb:27017/tutor_content?authSource=admin
+      REDIS_URL: redis://redis:6379
+      # OpenAI API key for LLM integration
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # Agent configuration
+      MAX_QUESTIONS_PER_BATCH: 10
+      QUESTION_GENERATION_TIMEOUT: 30
+      MAX_RETRIES: 3
     ports:
-      - "8001:8001"
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
     volumes:
-      - ./ml-service:/app
+      - ./agent:/app
       - ml_models:/app/models
       - ml_cache:/app/cache
     networks:
       - tutor_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Frontend React App
   frontend:
@@ -88,35 +128,40 @@ services:
       dockerfile: Dockerfile
     container_name: tutor_frontend
     environment:
-      REACT_APP_API_URL: http://localhost:5000/api
-      REACT_APP_ML_SERVICE_URL: http://localhost:8001
+      VITE_API_URL: http://localhost:5000/api
+      VITE_AGENT_URL: http://localhost:8000
     ports:
       - "3000:80"
     depends_on:
       - backend
+      - agent
     volumes:
       - ./frontend:/app
       - /app/node_modules
     networks:
       - tutor_network
 
-  # Redis for caching (optional but recommended)
-  redis:
-    image: redis:7-alpine
-    container_name: tutor_redis
+  # Nginx reverse proxy (optional for production-like setup)
+  nginx:
+    image: nginx:alpine
+    container_name: tutor_nginx
     ports:
-      - "6379:6379"
+      - "80:80"
     volumes:
-      - redis_data:/data
+      - ./ops/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+      - agent
     networks:
       - tutor_network
 
 volumes:
   postgres_data:
   mongodb_data:
-  ml_models:
-  ml_cache:
   redis_data:
+  ml_models: # For ML models/embeddings
+  ml_cache: # For HuggingFace/LangChain caches
 
 networks:
   tutor_network:

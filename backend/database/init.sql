@@ -1,8 +1,9 @@
 -- AI Tutor App Database Schema
 -- PostgreSQL initialization script
 
--- Enable UUID extension
+-- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "vector"; -- Enable pgvector for embeddings
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -140,6 +141,48 @@ CREATE TABLE IF NOT EXISTS feedback (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- RAG Corpus Tables for AI-powered question generation
+
+-- Corpus documents table (syllabus, textbooks, etc.)
+CREATE TABLE IF NOT EXISTS corpus_documents (
+    doc_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    subject VARCHAR(50) NOT NULL, -- 'math', 'science', 'english', etc.
+    class INTEGER NOT NULL CHECK (class BETWEEN 6 AND 12),
+    chapter VARCHAR(100),
+    module VARCHAR(100),
+    title TEXT NOT NULL,
+    source VARCHAR(200), -- 'NCERT', 'State Board', 'Competitive', etc.
+    license VARCHAR(100),
+    content_hash VARCHAR(64), -- SHA256 hash of content
+    uri VARCHAR(500), -- Source URL or file path
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Corpus chunks table with vector embeddings
+CREATE TABLE IF NOT EXISTS corpus_chunks (
+    chunk_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    doc_id UUID REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    embedding vector(1536), -- OpenAI text-embedding-3-small dimension (compatible with ada-002)
+    skill_ids TEXT[], -- Array of skill identifiers
+    metadata JSONB, -- Additional chunk metadata
+    chunk_index INTEGER, -- Position in document
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Skills mapping table
+CREATE TABLE IF NOT EXISTS skills (
+    skill_id VARCHAR(100) PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    subject VARCHAR(50),
+    class_level INTEGER,
+    difficulty_level VARCHAR(20),
+    prerequisites TEXT[], -- Array of prerequisite skill IDs
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -153,6 +196,14 @@ CREATE INDEX IF NOT EXISTS idx_progress_user_id ON user_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_progress_subject_topic ON user_progress(subject, topic);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON learning_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_achievements_user_id ON user_achievements(user_id);
+
+-- RAG Corpus indexes
+CREATE INDEX IF NOT EXISTS idx_corpus_documents_subject_class ON corpus_documents(subject, class);
+CREATE INDEX IF NOT EXISTS idx_corpus_documents_source ON corpus_documents(source);
+CREATE INDEX IF NOT EXISTS idx_corpus_chunks_doc_id ON corpus_chunks(doc_id);
+CREATE INDEX IF NOT EXISTS idx_corpus_chunks_skill_ids ON corpus_chunks USING GIN(skill_ids);
+CREATE INDEX IF NOT EXISTS idx_corpus_chunks_embedding ON corpus_chunks USING ivfflat (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_skills_subject_class ON skills(subject, class_level);
 
 -- Trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

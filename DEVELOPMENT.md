@@ -117,7 +117,7 @@ tutor/
 │   │   └── utils/          # Database & utility functions
 │   ├── database/           # SQL schema & migrations
 │   └── Dockerfile          # Backend container
-├── ml-service/             # Python FastAPI ML service
+├── agent/                  # Python FastAPI AI Agent service
 │   ├── src/
 │   │   ├── models/         # Pydantic models
 │   │   ├── services/       # ML logic
@@ -186,7 +186,7 @@ make test
 # Individual components
 cd backend && npm test
 cd frontend && npm test
-cd ml-service && python -m pytest
+cd agent && python -m pytest
 ```
 
 ### Integration Tests
@@ -232,7 +232,7 @@ DB_PASSWORD=tutor_password
 MONGODB_URI=mongodb://admin:admin123@mongodb:27017/tutor_content?authSource=admin
 JWT_SECRET=your-secret-key
 REDIS_URL=redis://redis:6379
-ML_SERVICE_URL=http://ml-service:8001
+ML_SERVICE_URL=http://agent:8000
 ```
 
 **Frontend (.env):**
@@ -326,10 +326,10 @@ docker-compose logs mongodb
 **ML Service Issues:**
 ```bash
 # Check ML service logs
-docker-compose logs ml-service
+docker-compose logs agent
 
 # Rebuild ML service
-docker-compose build ml-service
+docker-compose build agent
 ```
 
 ### Performance Tips

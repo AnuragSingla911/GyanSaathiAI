@@ -56,9 +56,23 @@ const disconnectMongoDB = async () => {
   }
 };
 
+// Sample Question schema and model
+const questionSchema = new mongoose.Schema({
+  questionText: { type: String, required: true },
+  options: [{ type: String, required: true }],
+  correctAnswer: { type: String, required: true },
+  subject: { type: String },
+  topic: { type: String },
+  difficulty: { type: String, enum: ['easy', 'medium', 'hard', 'adaptive'], default: 'medium' },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Question = mongoose.models.Question || mongoose.model('Question', questionSchema);
+
 module.exports = {
   connectMongoDB,
   getConnection,
   disconnectMongoDB,
-  mongoose
+  mongoose,
+  Question // Export the Question model
 };

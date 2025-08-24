@@ -69,10 +69,10 @@ const register = async (req, res, next) => {
     const result = await transaction(async (client) => {
       // Insert user
       const userResult = await client.query(
-        `INSERT INTO users (username, email, password_hash, first_name, last_name, grade_level)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING user_id, username, email, first_name, last_name, role, grade_level, created_at`,
-        [username, email, hashedPassword, firstName, lastName, gradeLevel]
+        `INSERT INTO users (username, email, password_hash, first_name, last_name, grade_level, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING user_id, username, email, first_name, last_name, role, grade_level, is_active, created_at`,
+        [username, email, hashedPassword, firstName, lastName, gradeLevel, true]
       );
 
       const user = userResult.rows[0];
@@ -142,7 +142,7 @@ const login = async (req, res, next) => {
     if (result.rows.length === 0) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid credentials, user not found'
       });
     }
 
@@ -157,11 +157,12 @@ const login = async (req, res, next) => {
     }
 
     // Check password
+    console.log('stored hash:', user.password_hash, user.password_hash?.length);
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid credentials, incorrect password'
       });
     }
 
@@ -182,7 +183,8 @@ const login = async (req, res, next) => {
       first_name: user.first_name,
       last_name: user.last_name,
       role: user.role,
-      grade_level: user.grade_level
+      grade_level: user.grade_level,
+      is_active: user.is_active
     };
     await redis.set(`user_${user.user_id}`, JSON.stringify(userData), 3600);
 

@@ -88,6 +88,62 @@ export const authAPI = {
 
 // Quiz API
 export const quizAPI = {
+  // V1 API methods
+  startQuizAttempt: async (data: {
+    subject: string;
+    topic?: string;
+    totalQuestions?: number;
+    timeLimitSeconds?: number;
+    skillFilters?: string[];
+  }): Promise<{
+    attemptId: string;
+    subject: string;
+    topic?: string;
+    totalQuestions: number;
+    timeLimitSeconds?: number;
+    startedAt: string;
+  }> => {
+    const response = await api.post('/v1/quiz-attempts', data);
+    return response.data.data;
+  },
+
+  getQuizAttempt: async (attemptId: string): Promise<{
+    attempt: any;
+    items: any[];
+  }> => {
+    const response = await api.get(`/v1/quiz-attempts/${attemptId}`);
+    return response.data.data;
+  },
+
+  saveAnswer: async (
+    attemptId: string,
+    itemId: string,
+    data: {
+      answer: string;
+      timeSpent?: number;
+      hintsUsed?: number;
+    },
+    idempotencyKey?: string
+  ): Promise<{
+    isCorrect: boolean;
+    score: number;
+    correctAnswer?: string;
+  }> => {
+    const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {};
+    const response = await api.put(`/v1/quiz-attempts/${attemptId}/items/${itemId}`, data, { headers });
+    return response.data.data;
+  },
+
+  submitQuizAttempt: async (attemptId: string): Promise<{
+    finalScore: number;
+    answeredQuestions: number;
+    totalQuestions: number;
+  }> => {
+    const response = await api.post(`/v1/quiz-attempts/${attemptId}/submit`);
+    return response.data.data;
+  },
+
+  // Legacy compatibility methods
   createQuiz: async (settings: QuizSettings): Promise<Quiz> => {
     const response = await api.post('/content/generate-quiz', settings);
     return response.data.data;
@@ -138,6 +194,16 @@ export const quizAPI = {
   }> => {
     const response = await api.get(`/quizzes/${quizId}/results`);
     return response.data.data;
+  },
+
+  getQuestions: async (params: {
+    subject?: string;
+    topic?: string;
+    difficulty?: string;
+    limit?: number;
+  }): Promise<any[]> => {
+    const response = await api.get('/quizzes/questions', { params });
+    return response.data.questions;
   },
 };
 

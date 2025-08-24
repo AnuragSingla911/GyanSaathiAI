@@ -1,0 +1,153 @@
+openapi: 3.0.3
+info:
+  title: AI Tutor API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+paths:
+  /auth/register:
+    post:
+      summary: Register
+      responses:
+        '201': { description: Created }
+  /auth/login:
+    post:
+      summary: Login
+      responses:
+        '200': { description: OK }
+  /auth/logout:
+    post:
+      summary: Logout
+      responses:
+        '200': { description: OK }
+  /me:
+    get:
+      summary: Get current user
+      responses:
+        '200': { description: OK }
+  /me/profile:
+    put:
+      summary: Update profile
+      responses:
+        '200': { description: OK }
+  /me/password:
+    put:
+      summary: Change password
+      responses:
+        '200': { description: OK }
+  /questions:
+    get:
+      summary: List questions
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Create draft question
+      responses:
+        '201': { description: Created }
+  /questions/{id}:
+    get:
+      summary: Get question
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /questions/{id}/promote:
+    post:
+      summary: Promote question to active
+      responses:
+        '200': { description: OK }
+  /questions/{id}/retire:
+    post:
+      summary: Retire question
+      responses:
+        '200': { description: OK }
+  /quiz-attempts:
+    post:
+      summary: Start quiz attempt
+      responses:
+        '201': { description: Created }
+  /quiz-attempts/{attemptId}:
+    get:
+      summary: Get quiz attempt
+      parameters:
+        - in: path
+          name: attemptId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /quiz-attempts/{attemptId}/items/{itemId}:
+    put:
+      summary: Save/grade answer
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /quiz-attempts/{attemptId}/submit:
+    post:
+      summary: Submit attempt
+      responses:
+        '200': { description: OK }
+  /users/{userId}/progress:
+    get:
+      summary: Get progress
+      parameters:
+        - in: query
+          name: scope
+          schema: { type: string, enum: [subject, topic, skill] }
+      responses:
+        '200': { description: OK }
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        user_id: { type: string }
+        email: { type: string }
+        role: { type: string }
+    Question:
+      type: object
+      properties:
+        id: { type: string }
+        version: { type: integer }
+        status: { type: string, enum: [draft, active, retired] }
+        stem: { type: string }
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              text: { type: string }
+        correctOptionIds:
+          type: array
+          items: { type: string }
+        canonicalSolution: { type: string }
+        unit: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+    QuizAttempt:
+      type: object
+      properties:
+        attempt_id: { type: string }
+        user_id: { type: string }
+    AttemptItem:
+      type: object
+      properties:
+        item_id: { type: string }
+        shown_payload: { type: object }
+    ProgressSummary:
+      type: object
+      properties:
+        user_id: { type: string }
+        subject: { type: string }
+        topic: { type: string }
+        skill: { type: string }
+        mastery_level: { type: number }

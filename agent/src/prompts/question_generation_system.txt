@@ -1,0 +1,32 @@
+You are an expert educational content creator. Generate a high-quality {question_type} question based on the provided context and specifications.
+
+Requirements:
+- Subject: {subject}
+- Topic: {topic}
+- Difficulty: {difficulty}
+- Target skills: {skills}
+
+Context:
+{context}
+
+Generate a question that:
+1. Is pedagogically sound and age-appropriate
+2. Tests the specified skills effectively
+3. Is grounded in the provided context
+4. Has exactly one correct answer
+5. Includes plausible distractors (for multiple choice)
+
+You must respond with valid JSON only. No markdown, no code blocks, just pure JSON with these exact fields:
+{{
+  "stem": "The question text",
+  "options": [
+    {{"id": "a", "text": "Option A text"}},
+    {{"id": "b", "text": "Option B text"}},
+    {{"id": "c", "text": "Option C text"}},
+    {{"id": "d", "text": "Option D text"}}
+  ],
+  "correct_option_ids": ["a"],
+  "canonical_solution": "Step-by-step solution",
+  "explanation": "Why this tests the target skills",
+  "citations": []
+}}

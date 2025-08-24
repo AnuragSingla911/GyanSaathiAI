@@ -1,0 +1,67 @@
+{
+  "documents": [
+    {
+      "content": "# Algebra Fundamentals\n\n## Linear Equations\nA linear equation is an equation that makes a straight line when graphed. The general form is y = mx + b, where m is the slope and b is the y-intercept.\n\n### Solving Linear Equations\n1. Combine like terms\n2. Move variables to one side\n3. Move constants to the other side\n4. Divide by coefficient\n\n### Example\nSolve: 2x + 3 = 11\n1. Subtract 3 from both sides: 2x = 8\n2. Divide both sides by 2: x = 4\n\n### Quadratic Formula\nFor equations in the form ax² + bx + c = 0:\nx = (-b ± √(b² - 4ac)) / 2a",
+      "metadata": {
+        "subject": "math",
+        "class": "8",
+        "chapter": "Algebra",
+        "title": "Algebra Fundamentals - Linear Equations",
+        "source": "sample_corpus",
+        "skills": ["linear_equations", "algebra", "problem_solving"]
+      }
+    },
+    {
+      "content": "# Basic Physics: Motion and Forces\n\n## Newton's Laws of Motion\n\n### First Law (Inertia)\nAn object at rest stays at rest, and an object in motion stays in motion unless acted upon by an external force.\n\n### Second Law\nForce equals mass times acceleration (F = ma)\n\n### Third Law\nFor every action, there is an equal and opposite reaction.\n\n## Energy and Work\nEnergy is the ability to do work. Work is done when a force moves an object.\n\n### Kinetic Energy\nKE = ½mv² where m is mass and v is velocity\n\n### Potential Energy\nPE = mgh where m is mass, g is gravity, and h is height\n\n### Conservation of Energy\nEnergy cannot be created or destroyed, only transformed from one form to another.",
+      "metadata": {
+        "subject": "science",
+        "class": "9",
+        "chapter": "Mechanics",
+        "title": "Newton's Laws of Motion and Energy",
+        "source": "sample_corpus",
+        "skills": ["newton_laws", "energy", "mechanics", "physics"]
+      }
+    },
+    {
+      "content": "# Chemistry: Atomic Structure and Bonding\n\n## Atomic Structure\nAtoms consist of a nucleus containing protons and neutrons, surrounded by electrons in energy levels.\n\n### Subatomic Particles\n- Protons: Positive charge, in nucleus\n- Neutrons: No charge, in nucleus\n- Electrons: Negative charge, orbiting nucleus\n\n### Atomic Number and Mass\n- Atomic number = number of protons\n- Mass number = protons + neutrons\n\n## Chemical Bonding\nAtoms bond to achieve stable electron configurations.\n\n### Ionic Bonding\nTransfer of electrons between atoms\n\n### Covalent Bonding\nSharing of electrons between atoms\n\n### Periodic Table\nGroups (columns) have similar chemical properties. Periods (rows) show energy levels.",
+      "metadata": {
+        "subject": "science",
+        "class": "9",
+        "chapter": "Chemistry",
+        "title": "Atomic Structure and Bonding",
+        "source": "sample_corpus",
+        "skills": ["atomic_structure", "chemical_bonding", "periodic_table", "chemistry"]
+      }
+    },
+    {
+      "content": "# World History: Ancient Civilizations\n\n## Mesopotamia\nLocated between the Tigris and Euphrates rivers, Mesopotamia is often called the 'Cradle of Civilization'.\n\n### Key Achievements\n- First writing system (cuneiform)\n- First cities and governments\n- Advanced mathematics and astronomy\n- Code of Hammurabi\n\n## Ancient Egypt\nLocated along the Nile River, Egypt developed one of the most stable civilizations in history.\n\n### Key Achievements\n- Pyramids and monumental architecture\n- Hieroglyphic writing\n- Advanced medicine and mummification\n- Solar calendar\n\n## Ancient Greece\nGreece's contributions to philosophy, democracy, and science shaped Western civilization.\n\n### Key Achievements\n- Democracy in Athens\n- Philosophy (Socrates, Plato, Aristotle)\n- Mathematics and geometry\n- Olympic Games",
+      "metadata": {
+        "subject": "history",
+        "class": "7",
+        "chapter": "Ancient Civilizations",
+        "title": "Ancient Civilizations Overview",
+        "source": "sample_corpus",
+        "skills": ["ancient_history", "civilizations", "cultural_achievements"]
+      }
+    },
+    {
+      "content": "# Literature: Storytelling Elements\n\n## Plot Structure\nEvery story follows a basic plot structure:\n\n### Exposition\nIntroduction of characters, setting, and background\n\n### Rising Action\nEvents that build tension and conflict\n\n### Climax\nThe turning point or most intense moment\n\n### Falling Action\nEvents that follow the climax\n\n### Resolution\nThe conclusion and how conflicts are resolved\n\n## Character Development\nCharacters can be:\n- **Protagonist**: Main character\n- **Antagonist**: Character who opposes the protagonist\n- **Round**: Complex, well-developed characters\n- **Flat**: Simple, one-dimensional characters\n\n## Theme\nThe central message or lesson of the story",
+      "metadata": {
+        "subject": "english",
+        "class": "8",
+        "chapter": "Literature",
+        "title": "Storytelling Elements",
+        "source": "sample_corpus",
+        "skills": ["storytelling", "plot_structure", "character_development", "literary_analysis"]
+      }
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "description": "Sample educational corpus for AI Tutor testing",
+    "total_documents": 5,
+    "subjects": ["math", "science", "history", "english"],
+    "class_levels": [7, 8, 9],
+    "created_at": "2024-08-24"
+  }
+}

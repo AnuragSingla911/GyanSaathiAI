@@ -7,7 +7,7 @@ const {
   changePassword,
   logout
 } = require('../controllers/authController');
-const { protect, userRateLimit } = require('../middleware/auth');
+const { protect, rateLimit: userRateLimit } = require('../middleware/auth');
 
 const router = express.Router();
 
