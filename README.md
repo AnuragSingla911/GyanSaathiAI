@@ -20,12 +20,6 @@ A complete AI-powered tutoring platform built with React, Node.js, Python LangCh
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-**Note**: 
-- **Backend ↔ Agent**: No direct communication
-- **Backend → MongoDB**: Fetches questions for students
-- **Agent → MongoDB**: Saves generated questions
-- **Backend → Redis**: User session validation and caching
-- **Agent → PostgreSQL**: RAG vector database (pgvector)
 
 ### **Data Flow Architecture**
 
@@ -101,6 +95,9 @@ Student Frontend → Nginx → Backend API → Database Queries
 # Clone and navigate to the repository
 cd Ai-Tutor
 
+# update API KEYS
+update OPENAI_API_KEY in .env file
+
 # Start all services
 docker-compose up -d
 
@@ -120,15 +117,12 @@ curl http://localhost                         # Frontend (via nginx)
 
 ### 🎓 Educational Features
 - **Adaptive Quiz Generation**: AI-powered questions based on subject, topic, and difficulty
-- **Real-time Progress Tracking**: Mastery levels, streaks, and detailed analytics
 - **Multi-subject Support**: Math, Science, History, English and extensible to other subjects
-- **Intelligent Grading**: Automatic scoring with detailed feedback
 
 ### 🔧 Technical Features
 - **Microservices Architecture**: Separate services for scalability
 - **RAG-Powered Content**: Retrieval-augmented generation for grounded questions
 - **LangGraph Workflows**: Sophisticated AI pipelines with validation
-- **Real-time Analytics**: Background processing with Redis queues
 - **JWT Authentication**: Secure user management with RBAC
 - **Vector Search**: pgvector for semantic content retrieval
 
