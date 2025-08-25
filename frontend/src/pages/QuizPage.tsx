@@ -7,6 +7,7 @@ import {
 import { Radio as MuiRadio } from '@mui/material';
 import { Quiz, PlayArrow, Check } from '@mui/icons-material';
 import { quizAPI } from '../services/api';
+import MathJaxRenderer from '../components/MathJaxRenderer';
 
 interface Question {
   _id: string;
@@ -42,7 +43,7 @@ const QuizPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const fetchedQuestions = await quizAPI.getQuestions({ limit: 5 });
+      const fetchedQuestions = await quizAPI.getQuestions({ limit: 10 });
       setQuestions(fetchedQuestions || []);
       setSelectedAnswers({});
       setSubmitted(false);
@@ -198,7 +199,11 @@ const QuizPage: React.FC = () => {
                         </Stack>
 
                         <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 700 }}>
-                          {q.questionText}
+                          <MathJaxRenderer 
+                            content={q.questionText} 
+                            displayMode="block"
+                            showLoading={false}
+                          />
                         </Typography>
 
                         <FormControl component="fieldset" sx={{ width: '100%' }}>
@@ -211,7 +216,13 @@ const QuizPage: React.FC = () => {
                                 key={optionIdx}
                                 value={option}
                                 control={<MuiRadio color="primary" />}
-                                label={option}
+                                label={
+                                  <MathJaxRenderer 
+                                    content={option} 
+                                    displayMode="inline"
+                                    showLoading={false}
+                                  />
+                                }
                                 sx={{
                                   mx: 0,
                                   my: 0.5,
@@ -297,13 +308,13 @@ const QuizPage: React.FC = () => {
                 >
                   <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
                     <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                      Q{idx + 1}: {r.question}
+                      Q{idx + 1}: <MathJaxRenderer content={r.question} displayMode="inline" showLoading={false} />
                     </Typography>
                     <Typography color={r.isCorrect ? 'success.main' : 'error.main'}>
-                      Your Answer: {r.userAnswer}
+                      Your Answer: <MathJaxRenderer content={r.userAnswer} displayMode="inline" showLoading={false} />
                     </Typography>
                     <Typography color="text.secondary">
-                      Correct Answer: {r.correctAnswer}
+                      Correct Answer: <MathJaxRenderer content={r.correctAnswer} displayMode="inline" showLoading={false} />
                     </Typography>
                     <Typography
                       color={r.isCorrect ? 'success.main' : 'error.main'}

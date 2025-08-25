@@ -1,0 +1,62 @@
+/* MathJax Renderer Styles */
+
+.math-inline {
+  display: inline;
+  vertical-align: middle;
+}
+
+.math-display {
+  display: block;
+  text-align: center;
+  margin: 1rem 0;
+}
+
+/* MathJax specific styling */
+.MathJax {
+  outline: none;
+}
+
+/* Ensure proper spacing around math content */
+.math-inline .MathJax {
+  margin: 0 0.2em;
+}
+
+.math-display .MathJax {
+  margin: 0.5em 0;
+}
+
+/* Loading state styling */
+.math-loading {
+  opacity: 0.6;
+  transition: opacity 0.3s ease-in-out;
+}
+
+/* Error state styling */
+.math-error {
+  color: #d32f2f;
+  font-style: italic;
+  padding: 0.5rem;
+  border: 1px solid #ffcdd2;
+  border-radius: 4px;
+  background-color: #ffebee;
+}
+
+/* Responsive math content */
+@media (max-width: 768px) {
+  .math-display .MathJax {
+    font-size: 0.9em;
+    overflow-x: auto;
+  }
+  
+  .math-inline .MathJax {
+    font-size: 0.95em;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .math-error {
+    border-color: #c62828;
+    background-color: #1b1b1b;
+  }
+}

@@ -8,13 +8,17 @@ const router = express.Router();
 router.get('/questions', protect, async (req, res) => {
   try {
     const { subject, topic, difficulty, limit = 10 } = req.query;
+    
     const filter = {};
     if (subject) filter.subject = subject;
     if (topic) filter.topic = topic;
     if (difficulty) filter.difficulty = difficulty;
+    
     const questions = await Question.find(filter).limit(Number(limit));
+    
     res.json({ success: true, questions });
   } catch (error) {
+    console.error('❌ Error fetching questions:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch questions', error: error.message });
   }
 });
