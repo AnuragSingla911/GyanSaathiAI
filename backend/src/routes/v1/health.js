@@ -1,7 +1,7 @@
 const express = require('express');
 const { query } = require('../../utils/database');
 const { mongoose } = require('../../utils/mongodb');
-const redis = require('../../utils/redis');
+const { getClient } = require('../../utils/redis');
 
 const router = express.Router();
 
@@ -39,8 +39,14 @@ router.get('/', async (req, res) => {
 
     // Check Redis
     try {
-      await redis.ping();
-      health.services.redis = 'healthy';
+      const redisClient = getClient();
+      if (redisClient && redisClient.isReady) {
+        await redisClient.ping();
+        health.services.redis = 'healthy';
+      } else {
+        health.services.redis = 'unhealthy';
+        health.status = 'DEGRADED';
+      }
     } catch (error) {
       health.services.redis = 'unhealthy';
       health.status = 'DEGRADED';

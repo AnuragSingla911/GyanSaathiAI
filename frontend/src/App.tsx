@@ -4,6 +4,7 @@ import { Box } from '@mui/material';
 import { motion } from 'framer-motion';
 
 import { useAuth } from './contexts/AuthContext';
+import { DashboardProvider } from './contexts/DashboardContext';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
 
@@ -18,16 +19,23 @@ import NotFoundPage from './pages/NotFoundPage';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  console.log('ProtectedRoute: Component rendering');
+  
   const { user, loading } = useAuth();
+  
+  console.log('ProtectedRoute: Auth state', { user, loading });
 
   if (loading) {
+    console.log('ProtectedRoute: Showing loading spinner');
     return <LoadingSpinner />;
   }
 
   if (!user) {
+    console.log('ProtectedRoute: No user, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
+  console.log('ProtectedRoute: User authenticated, rendering children');
   return <>{children}</>;
 };
 
@@ -44,6 +52,33 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return <>{children}</>;
+};
+
+// Protected Routes with Dashboard Context
+const ProtectedRoutes: React.FC = () => {
+  console.log('ProtectedRoutes: Component rendering');
+  
+  const { user } = useAuth();
+  
+  console.log('ProtectedRoutes: Auth state', { 
+    user, 
+    userId: user?.id,
+    userKeys: user ? Object.keys(user) : 'no user',
+    userStringified: JSON.stringify(user, null, 2)
+  });
+  
+  if (!user?.id) {
+    console.log('ProtectedRoutes: No user id, returning null');
+    return null;
+  }
+  
+  console.log('ProtectedRoutes: User has id, rendering DashboardProvider and Layout');
+  
+  return (
+    <DashboardProvider userId={user.id}>
+      <Layout />
+    </DashboardProvider>
+  );
 };
 
 const App: React.FC = () => {
@@ -85,7 +120,7 @@ const App: React.FC = () => {
           path="/"
           element={
             <ProtectedRoute>
-              <Layout />
+              <ProtectedRoutes />
             </ProtectedRoute>
           }
         >

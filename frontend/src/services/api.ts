@@ -18,7 +18,7 @@ import {
 // Create axios instance
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
-  timeout: 10000,
+  timeout: 30000, // Increased from 10000 to 30000 (30 seconds)
   headers: {
     'Content-Type': 'application/json',
   },
@@ -242,65 +242,80 @@ export const contentAPI = {
 export const progressAPI = {
   getUserProgress: async (userId: string): Promise<{
     overall: {
-      totalQuizzes: number;
+      totalSkills: number;
       totalQuestions: number;
-      correctAnswers: number;
-      averageScore: number;
-      totalTimeSpent: number;
+      totalCorrect: number;
+      averageMastery: number;
       currentStreak: number;
       bestStreak: number;
-    };
-    bySubject: Record<string, {
-      totalQuestions: number;
-      correctAnswers: number;
+      totalAttempts: number;
+      completedAttempts: number;
       averageScore: number;
-      masteryLevel: number;
-    }>;
-    byTopic: Record<string, {
-      subject: string;
-      totalQuestions: number;
-      correctAnswers: number;
-      masteryLevel: number;
-      lastPracticed: string;
-    }>;
+    };
+    progress: {
+      bySubject?: Record<string, {
+        skillsCount: number;
+        totalQuestions: number;
+        correctAnswers: number;
+        averageMastery: number;
+        accuracy: number;
+      }>;
+      byTopic?: Record<string, {
+        subject: string;
+        topic: string;
+        skillsCount: number;
+        totalQuestions: number;
+        correctAnswers: number;
+        averageMastery: number;
+        lastPracticed: string;
+      }>;
+      bySkill?: Array<{
+        subject: string;
+        topic: string;
+        skill: string;
+        totalQuestions: number;
+        correctAnswers: number;
+        masteryLevel: number;
+        currentStreak: number;
+        bestStreak: number;
+        lastUpdated: string;
+      }>;
+    };
     recentActivity: Array<{
       date: string;
-      quizzes: number;
-      questions: number;
-      correctAnswers: number;
+      attempts: number;
+      questionsAnswered: number;
+      accuracy: number;
     }>;
   }> => {
-    const response = await api.get(`/progress/user/${userId}`);
+    const response = await api.get(`/v1/progress/${userId}/progress`);
+    // The backend returns { success: true, data: {...} }
+    // We need to return the data part directly
     return response.data.data;
   },
 
   getAnalytics: async (userId: string, timeframe: 'week' | 'month' | 'year' = 'month'): Promise<{
+    timeframe: string;
     performance: Array<{
       date: string;
-      score: number;
+      accuracy: number;
       questionsAnswered: number;
-      timeSpent: number;
+      totalTimeMinutes: number;
     }>;
     subjectBreakdown: Array<{
       subject: string;
       questionsAnswered: number;
       correctAnswers: number;
-      averageScore: number;
+      accuracy: number;
     }>;
     difficultyProgression: Array<{
       difficulty: string;
       questionsAnswered: number;
       correctAnswers: number;
-      averageScore: number;
-    }>;
-    achievements: Array<{
-      name: string;
-      description: string;
-      earnedAt: string;
-      points: number;
+      accuracy: number;
     }>;
   }> => {
-    const response = await api.get(`/progress/analytics/${userId}`, {
+    const response = await api.get(`/v1/progress/${userId}/analytics`, {
       params: { timeframe },
     });
     return response.data.data;

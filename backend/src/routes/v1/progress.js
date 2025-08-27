@@ -60,7 +60,7 @@ router.get('/:userId/progress', protect, ownerOrAdmin('userId'), async (req, res
          AVG(mastery_level) as average_mastery,
          MAX(current_streak) as current_streak,
          MAX(best_streak) as best_streak
-       FROM progress_summary 
+       FROM user_progress 
        ${whereClause}`,
       params
     );
@@ -72,10 +72,8 @@ router.get('/:userId/progress', protect, ownerOrAdmin('userId'), async (req, res
       `SELECT 
          COUNT(*) as total_attempts,
          COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_attempts,
-         AVG(CASE WHEN status = 'completed' THEN 
-           (SELECT AVG(score) FROM attempt_items WHERE attempt_id = quiz_attempts.attempt_id)
-         END) * 100 as average_score
-       FROM quiz_attempts 
+         AVG(CASE WHEN status = 'completed' THEN score ELSE NULL END) as average_score
+       FROM quizzes 
        WHERE user_id = $1`,
       [userId]
     );
@@ -93,7 +91,7 @@ router.get('/:userId/progress', protect, ownerOrAdmin('userId'), async (req, res
            SUM(total_questions_answered) as total_questions,
            SUM(correct_answers) as correct_answers,
            AVG(mastery_level) as average_mastery
-         FROM progress_summary 
+         FROM user_progress 
          ${whereClause}
          GROUP BY subject
          ORDER BY average_mastery DESC
@@ -121,8 +119,8 @@ router.get('/:userId/progress', protect, ownerOrAdmin('userId'), async (req, res
            SUM(total_questions_answered) as total_questions,
            SUM(correct_answers) as correct_answers,
            AVG(mastery_level) as average_mastery,
-           MAX(last_updated_at) as last_practiced
-         FROM progress_summary 
+           MAX(last_practiced) as last_practiced
+         FROM user_progress 
          ${whereClause}
          GROUP BY subject, topic
          ORDER BY average_mastery DESC
@@ -154,8 +152,8 @@ router.get('/:userId/progress', protect, ownerOrAdmin('userId'), async (req, res
            mastery_level,
            current_streak,
            best_streak,
-           last_updated_at
-         FROM progress_summary 
+           last_practiced
+         FROM user_progress 
          ${whereClause}
          ORDER BY mastery_level DESC
          LIMIT $${paramIndex}`,
@@ -171,7 +169,7 @@ router.get('/:userId/progress', protect, ownerOrAdmin('userId'), async (req, res
         masteryLevel: parseFloat(row.mastery_level),
         currentStreak: parseInt(row.current_streak),
         bestStreak: parseInt(row.best_streak),
-        lastUpdated: row.last_updated_at
+        lastUpdated: row.last_practiced
       }));
     }
 
@@ -181,11 +179,9 @@ router.get('/:userId/progress', protect, ownerOrAdmin('userId'), async (req, res
          DATE(started_at) as date,
          COUNT(*) as attempts,
          SUM(completed_questions) as questions_answered,
-         AVG(CASE WHEN status = 'completed' THEN 
-           (SELECT AVG(CASE WHEN is_correct THEN 1 ELSE 0 END) FROM attempt_items WHERE attempt_id = quiz_attempts.attempt_id)
-         END) as accuracy
-       FROM quiz_attempts 
-       WHERE user_id = $1 AND started_at >= CURRENT_DATE - INTERVAL '30 days'
+         AVG(score) as average_score
+       FROM quizzes 
+       WHERE user_id = $1 AND started_at >= CURRENT_DATE - INTERVAL '30 days' AND status = 'completed'
        GROUP BY DATE(started_at)
        ORDER BY date DESC`,
       [userId]
@@ -195,7 +191,7 @@ router.get('/:userId/progress', protect, ownerOrAdmin('userId'), async (req, res
       date: row.date,
       attempts: parseInt(row.attempts),
       questionsAnswered: parseInt(row.questions_answered) || 0,
-      accuracy: row.accuracy ? parseFloat(row.accuracy) * 100 : 0
+      accuracy: row.average_score ? parseFloat(row.average_score) : 0
     }));
 
     res.json({
@@ -256,11 +252,11 @@ router.get('/:userId/analytics', protect, ownerOrAdmin('userId'), async (req, re
       `SELECT 
          DATE(qa.started_at) as date,
          AVG(CASE WHEN ai.is_correct THEN 1 ELSE 0 END) * 100 as accuracy,
-         COUNT(ai.item_id) as questions_answered,
-         SUM(EXTRACT(EPOCH FROM (ai.responded_at - qa.started_at))/60) as total_time_minutes
-       FROM quiz_attempts qa
-       JOIN attempt_items ai ON qa.attempt_id = ai.attempt_id
-       WHERE qa.user_id = $1 AND ${dateFilter} AND ai.answer_payload IS NOT NULL
+         COUNT(ai.response_id) as questions_answered,
+         SUM(EXTRACT(EPOCH FROM (ai.created_at - qa.started_at))/60) as total_time_minutes
+       FROM quizzes qa
+       JOIN quiz_responses ai ON qa.quiz_id = ai.quiz_id
+       WHERE qa.user_id = $1 AND ${dateFilter} AND ai.user_answer IS NOT NULL
        ${subject ? 'AND qa.subject = $2' : ''}
        GROUP BY DATE(qa.started_at)
        ORDER BY date`,
@@ -271,12 +267,12 @@ router.get('/:userId/analytics', protect, ownerOrAdmin('userId'), async (req, re
     const subjectBreakdownResult = await query(
       `SELECT 
          qa.subject,
-         COUNT(ai.item_id) as questions_answered,
+         COUNT(ai.response_id) as questions_answered,
          SUM(CASE WHEN ai.is_correct THEN 1 ELSE 0 END) as correct_answers,
          AVG(CASE WHEN ai.is_correct THEN 1 ELSE 0 END) * 100 as accuracy
-       FROM quiz_attempts qa
-       JOIN attempt_items ai ON qa.attempt_id = ai.attempt_id
-       WHERE qa.user_id = $1 AND ${dateFilter} AND ai.answer_payload IS NOT NULL
+       FROM quizzes qa
+       JOIN quiz_responses ai ON qa.quiz_id = ai.quiz_id
+       WHERE qa.user_id = $1 AND ${dateFilter} AND ai.user_answer IS NOT NULL
        GROUP BY qa.subject
        ORDER BY accuracy DESC`,
       [userId]
@@ -286,15 +282,15 @@ router.get('/:userId/analytics', protect, ownerOrAdmin('userId'), async (req, re
     const difficultyResult = await query(
       `SELECT 
          COALESCE(
-           (ai.shown_payload->'metadata'->>'tags')::jsonb->>0,
+           ai.difficulty_level,
            'medium'
          ) as difficulty,
-         COUNT(ai.item_id) as questions_answered,
+         COUNT(ai.response_id) as questions_answered,
          SUM(CASE WHEN ai.is_correct THEN 1 ELSE 0 END) as correct_answers,
          AVG(CASE WHEN ai.is_correct THEN 1 ELSE 0 END) * 100 as accuracy
-       FROM quiz_attempts qa
-       JOIN attempt_items ai ON qa.attempt_id = ai.attempt_id
-       WHERE qa.user_id = $1 AND ${dateFilter} AND ai.answer_payload IS NOT NULL
+       FROM quizzes qa
+       JOIN quiz_responses ai ON qa.quiz_id = ai.quiz_id
+       WHERE qa.user_id = $1 AND ${dateFilter} AND ai.user_answer IS NOT NULL
        GROUP BY difficulty
        ORDER BY 
          CASE difficulty 

@@ -43,14 +43,20 @@ const navigationItems = [
 ];
 
 const Layout: React.FC = () => {
+  console.log('Layout: Component starting to render');
+  
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
 
+  console.log('Layout: Hooks initialized', { user, location: location.pathname });
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  console.log('Layout: State initialized, rendering main layout');
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -269,6 +275,7 @@ const Layout: React.FC = () => {
         }}
       >
         <Toolbar />
+        {console.log('Layout: About to render Outlet')}
         <Outlet />
       </Box>
     </Box>

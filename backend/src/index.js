@@ -14,10 +14,10 @@ const errorHandler = require('./middleware/errorHandler');
 
 // Route imports (using original routes temporarily)
 const authRoutes = require('./routes/auth');
-// const questionRoutes = require('./routes/v1/questions');
-// const quizRoutes = require('./routes/v1/quiz-attempts');
-// const progressRoutes = require('./routes/v1/progress');
-// const healthRoutes = require('./routes/v1/health');
+const questionRoutes = require('./routes/v1/questions');
+const quizRoutes = require('./routes/v1/quiz-attempts');
+const progressRoutes = require('./routes/v1/progress');
+const healthRoutes = require('./routes/v1/health');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -51,9 +51,15 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // API routes (simplified for now)
 app.use('/api/auth', authRoutes);
 app.use('/api/content', require('./routes/content'));
-app.use('/api/quizzes', require('./routes/quizzes'));
+// app.use('/api/quizzes', require('./routes/quizzes')); // REMOVED - conflicting with v1 route
 app.use('/api/progress', require('./routes/progress'));
 app.use('/api/users', require('./routes/users'));
+
+// V1 API routes
+app.use('/api/v1/questions', questionRoutes);
+app.use('/api/v1/quiz-attempts', quizRoutes);
+app.use('/api/v1/progress', progressRoutes);
+app.use('/api/v1/health', healthRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

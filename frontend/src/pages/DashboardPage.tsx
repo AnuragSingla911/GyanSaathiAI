@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -10,6 +10,8 @@ import {
   Chip,
   Avatar,
   Paper,
+  Skeleton,
+  Alert,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -22,34 +24,81 @@ import {
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../contexts/AuthContext';
+import { useDashboard } from '../contexts/DashboardContext';
 
 const DashboardPage: React.FC = () => {
+  console.log('DashboardPage: Component starting to render');
+  
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { stats, loading, error, refreshDashboard } = useDashboard();
 
-  // Mock data - in real app, this would come from API
-  const mockStats = {
-    totalQuizzes: 15,
-    correctAnswers: 89,
-    totalQuestions: 120,
-    currentStreak: 7,
-    weeklyGoal: 50,
-    weeklyProgress: 35,
-    recentSubjects: ['Math', 'Physics', 'Chemistry'],
-    achievements: [
-      { name: 'First Quiz', icon: '🎯', earned: true },
-      { name: 'Week Warrior', icon: '🔥', earned: true },
-      { name: 'Perfect Score', icon: '⭐', earned: false },
-      { name: 'Speed Demon', icon: '⚡', earned: false },
-    ],
-    recentActivity: [
-      { subject: 'Math', topic: 'Algebra', score: 95, date: '2024-01-15' },
-      { subject: 'Physics', topic: 'Mechanics', score: 87, date: '2024-01-14' },
-      { subject: 'Chemistry', topic: 'Atoms', score: 92, date: '2024-01-13' },
-    ]
-  };
+  console.log('DashboardPage: Hooks initialized', { user, stats, loading, error });
 
-  const accuracy = Math.round((mockStats.correctAnswers / mockStats.totalQuestions) * 100);
+  useEffect(() => {
+    console.log('DashboardPage: useEffect triggered', { userId: user?.id });
+    if (user?.id) {
+      refreshDashboard();
+    }
+  }, [user?.id, refreshDashboard]);
+
+  console.log('DashboardPage: Before conditional renders', { loading, error, stats });
+
+  // Show loading state
+  if (loading) {
+    console.log('DashboardPage: Showing loading skeleton');
+    return <DashboardSkeleton />;
+  }
+
+  // Show error state with retry option
+  if (error) {
+    console.log('DashboardPage: Showing error state');
+    return (
+      <Box>
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+          <Button onClick={refreshDashboard} sx={{ ml: 2 }}>
+            Retry
+          </Button>
+        </Alert>
+      </Box>
+    );
+  }
+
+  // Show fallback when no stats (this should not happen with our updated context)
+  if (!stats) {
+    console.log('DashboardPage: No stats available, showing loading message');
+    return (
+      <Box>
+        <Alert severity="info">
+          Loading dashboard data...
+        </Alert>
+      </Box>
+    );
+  }
+
+  console.log('DashboardPage: Rendering main dashboard with stats', stats);
+
+  const accuracy = stats.overall.totalQuestions > 0 
+    ? Math.round((stats.overall.totalCorrect / stats.overall.totalQuestions) * 100) 
+    : 0;
+
+  // Get recent subjects from progress data
+  const recentSubjects = stats.progress.bySubject 
+    ? Object.keys(stats.progress.bySubject).slice(0, 3)
+    : ['Math', 'Physics', 'Chemistry']; // Fallback
+
+  // Get recent activity for display
+  const recentActivity = stats.recentActivity.slice(0, 3).map((activity: any) => ({
+    subject: 'Quiz', // We don't have subject info in recent activity
+    topic: 'Practice',
+    score: Math.round(activity.accuracy),
+    date: activity.date,
+  }));
+
+  // Calculate weekly progress (simplified - using total questions as weekly goal)
+  const weeklyGoal = Math.max(10, Math.ceil(stats.overall.totalQuestions / 4)); // Dynamic goal
+  const weeklyProgress = Math.min(stats.overall.totalQuestions, weeklyGoal);
 
   return (
     <Box>
@@ -58,7 +107,7 @@ const DashboardPage: React.FC = () => {
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={8}>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
-              Welcome back, {user?.firstName}! 👋
+              Welcome back, {user?.firstName || user?.username}! 👋
             </Typography>
             <Typography variant="h6" sx={{ opacity: 0.9 }}>
               Ready to continue your learning journey? You're doing great!
@@ -95,7 +144,7 @@ const DashboardPage: React.FC = () => {
                     Total Quizzes
                   </Typography>
                   <Typography variant="h4" fontWeight="bold">
-                    {mockStats.totalQuizzes}
+                    {stats.overall.totalAttempts}
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: 'primary.light' }}>
@@ -135,7 +184,7 @@ const DashboardPage: React.FC = () => {
                     Current Streak
                   </Typography>
                   <Typography variant="h4" fontWeight="bold" color="warning.main">
-                    {mockStats.currentStreak}
+                    {stats.overall.currentStreak}
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: 'warning.light' }}>
@@ -152,14 +201,14 @@ const DashboardPage: React.FC = () => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="text.secondary" gutterBottom>
-                    Study Time
+                    Mastery Level
                   </Typography>
                   <Typography variant="h4" fontWeight="bold" color="info.main">
-                    2.5h
+                    {Math.round(stats.overall.averageMastery * 100)}%
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: 'info.light' }}>
-                  <AccessTime />
+                  <School />
                 </Avatar>
               </Box>
             </CardContent>
@@ -175,21 +224,21 @@ const DashboardPage: React.FC = () => {
               </Typography>
               <Box display="flex" alignItems="center" gap={2} mb={2}>
                 <Typography variant="body2" color="text.secondary">
-                  {mockStats.weeklyProgress} / {mockStats.weeklyGoal} questions
+                  {weeklyProgress} / {weeklyGoal} questions
                 </Typography>
                 <Chip 
-                  label={`${Math.round((mockStats.weeklyProgress / mockStats.weeklyGoal) * 100)}%`}
+                  label={`${Math.round((weeklyProgress / weeklyGoal) * 100)}%`}
                   size="small"
                   color="primary"
                 />
               </Box>
               <LinearProgress
                 variant="determinate"
-                value={(mockStats.weeklyProgress / mockStats.weeklyGoal) * 100}
+                value={(weeklyProgress / weeklyGoal) * 100}
                 sx={{ height: 8, borderRadius: 4 }}
               />
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                Keep going! You're {mockStats.weeklyGoal - mockStats.weeklyProgress} questions away from your weekly goal.
+                Keep going! You're {weeklyGoal - weeklyProgress} questions away from your weekly goal.
               </Typography>
             </CardContent>
           </Card>
@@ -203,7 +252,7 @@ const DashboardPage: React.FC = () => {
                 Quick Start
               </Typography>
               <Box display="flex" flexDirection="column" gap={1}>
-                {mockStats.recentSubjects.map((subject) => (
+                {recentSubjects.map((subject) => (
                   <Button
                     key={subject}
                     variant="outlined"
@@ -227,31 +276,37 @@ const DashboardPage: React.FC = () => {
                 Recent Activity
               </Typography>
               <Box display="flex" flexDirection="column" gap={2}>
-                {mockStats.recentActivity.map((activity, index) => (
-                  <Box
-                    key={index}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="space-between"
-                    p={2}
-                    bgcolor="background.default"
-                    borderRadius={2}
-                  >
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight="bold">
-                        {activity.subject} - {activity.topic}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {new Date(activity.date).toLocaleDateString()}
-                      </Typography>
+                {recentActivity.length > 0 ? (
+                  recentActivity.map((activity, index) => (
+                    <Box
+                      key={index}
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="space-between"
+                      p={2}
+                      bgcolor="background.default"
+                      borderRadius={2}
+                    >
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          {activity.subject} - {activity.topic}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(activity.date).toLocaleDateString()}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={`${activity.score}%`}
+                        color={activity.score >= 90 ? 'success' : activity.score >= 70 ? 'warning' : 'error'}
+                        size="small"
+                      />
                     </Box>
-                    <Chip
-                      label={`${activity.score}%`}
-                      color={activity.score >= 90 ? 'success' : activity.score >= 70 ? 'warning' : 'error'}
-                      size="small"
-                    />
-                  </Box>
-                ))}
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                    No recent activity. Start taking quizzes to see your progress!
+                  </Typography>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -265,7 +320,7 @@ const DashboardPage: React.FC = () => {
                 Achievements
               </Typography>
               <Box display="flex" flexDirection="column" gap={1}>
-                {mockStats.achievements.map((achievement, index) => (
+                {getAchievements(stats).map((achievement, index) => (
                   <Box
                     key={index}
                     display="flex"
@@ -297,5 +352,76 @@ const DashboardPage: React.FC = () => {
     </Box>
   );
 };
+
+// Helper function to determine achievements based on progress
+const getAchievements = (stats: any) => {
+  const achievements = [
+    { 
+      name: 'First Quiz', 
+      icon: '🎯', 
+      earned: stats.overall.totalAttempts > 0 
+    },
+    { 
+      name: 'Week Warrior', 
+      icon: '🔥', 
+      earned: stats.overall.currentStreak >= 7 
+    },
+    { 
+      name: 'Perfect Score', 
+      icon: '⭐', 
+      earned: stats.overall.averageScore >= 100 
+    },
+    { 
+      name: 'Speed Demon', 
+      icon: '⚡', 
+      earned: stats.overall.totalQuestions >= 50 
+    },
+  ];
+  return achievements;
+};
+
+// Loading skeleton component
+const DashboardSkeleton: React.FC = () => (
+  <Box>
+    <Paper sx={{ p: 3, mb: 3 }}>
+      <Skeleton variant="text" width="60%" height={40} />
+      <Skeleton variant="text" width="40%" height={30} />
+    </Paper>
+    
+    <Grid container spacing={3}>
+      {[...Array(4)].map((_, i) => (
+        <Grid item xs={12} sm={6} md={3} key={i}>
+          <Card>
+            <CardContent>
+              <Skeleton variant="text" width="50%" height={20} />
+              <Skeleton variant="text" width="80%" height={40} />
+            </CardContent>
+          </Card>
+        </Grid>
+      ))}
+      
+      <Grid item xs={12} md={8}>
+        <Card>
+          <CardContent>
+            <Skeleton variant="text" width="30%" height={30} />
+            <Skeleton variant="rectangular" width="100%" height={20} sx={{ my: 2 }} />
+            <Skeleton variant="text" width="80%" height={20} />
+          </CardContent>
+        </Card>
+      </Grid>
+      
+      <Grid item xs={12} md={4}>
+        <Card>
+          <CardContent>
+            <Skeleton variant="text" width="40%" height={30} />
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} variant="rectangular" width="100%" height={40} sx={{ my: 1 }} />
+            ))}
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
+  </Box>
+);
 
 export default DashboardPage;

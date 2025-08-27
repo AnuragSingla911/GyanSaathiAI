@@ -1,57 +1,121 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Container, Typography, Card, CardContent, Button, Chip, CircularProgress,
-  Alert, RadioGroup, FormControlLabel, FormControl, FormLabel, Stack, Divider
+  Alert, RadioGroup, FormControlLabel, FormControl, FormLabel, Stack, Divider,
+  LinearProgress
 } from '@mui/material';
 import { Radio as MuiRadio } from '@mui/material';
-import { Quiz, PlayArrow, Check } from '@mui/icons-material';
+import { Quiz, PlayArrow, Check, Timer, School } from '@mui/icons-material';
 import { quizAPI } from '../services/api';
 import MathJaxRenderer from '../components/MathJaxRenderer';
 
 interface Question {
-  _id: string;
-  questionText: string;
-  options: string[];
-  correctAnswer: string;
-  difficulty?: string;
-  topic?: string;
+  questionId: string;
+  question: {
+    stem: string;
+    options: Array<{ id: string; text: string }>;
+  };
+  metadata: {
+    subject: string;
+    topic: string;
+    tags: string[];
+  };
 }
 
-interface QuizResult {
-  questionId: string;
-  question: string;
-  userAnswer: string;
-  correctAnswer: string;
-  isCorrect: boolean;
+interface QuizAttempt {
+  attemptId: string;
+  subject: string;
+  topic?: string;
+  totalQuestions: number;
+  startedAt: string;
 }
 
 const QuizPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentAttempt, setCurrentAttempt] = useState<QuizAttempt | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<{ [key: string]: string }>({});
   const [submitted, setSubmitted] = useState(false);
-  const [results, setResults] = useState<QuizResult[]>([]);
+  const [results, setResults] = useState<any[]>([]);
+  const [timeSpent, setTimeSpent] = useState<{ [key: string]: number }>({});
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  
+  const currentQuestion = questions[currentQuestionIndex];
+  const answeredCount = Object.keys(selectedAnswers).length;
+  const progress = (answeredCount / questions.length) * 100;
 
-  const answeredCount = useMemo(
-    () => Object.keys(selectedAnswers).length,
-    [selectedAnswers]
-  );
+  // Timer effect
+  useEffect(() => {
+    if (startTime && currentQuestion) {
+      const timer = setInterval(() => {
+        const questionId = currentQuestion.questionId;
+        setTimeSpent(prev => ({
+          ...prev,
+          [questionId]: Math.floor((Date.now() - startTime.getTime()) / 1000)
+        }));
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [startTime, currentQuestion]);
 
   const handleStartQuiz = async () => {
+    console.log('QuizPage: Starting quiz...');
     setLoading(true);
     setError(null);
     try {
-      const fetchedQuestions = await quizAPI.getQuestions({ limit: 10 });
-      setQuestions(fetchedQuestions || []);
+      // Start a new quiz attempt
+      console.log('QuizPage: Calling startQuizAttempt...');
+      const attempt = await quizAPI.startQuizAttempt({
+        subject: 'math', // Default subject - could be made configurable
+        topic: 'algebra',
+        totalQuestions: 5
+      });
+      console.log('QuizPage: Quiz attempt created:', attempt);
+
+      setCurrentAttempt(attempt);
+      
+      // Get the attempt details with questions
+      console.log('QuizPage: Getting quiz attempt details...');
+      const attemptDetails = await quizAPI.getQuizAttempt(attempt.attemptId);
+      console.log('QuizPage: Attempt details received:', attemptDetails);
+      console.log('QuizPage: Attempt details structure:', {
+        hasAttempt: !!attemptDetails.attempt,
+        hasItems: !!attemptDetails.items,
+        itemsLength: attemptDetails.items?.length,
+        firstItem: attemptDetails.items?.[0],
+        firstItemQuestion: attemptDetails.items?.[0]?.question
+      });
+      
+      if (attemptDetails && attemptDetails.items) {
+        const mappedQuestions = attemptDetails.items.map((item: any) => ({
+          questionId: item.itemId,
+          question: item.question,
+          metadata: item.question.metadata
+        }));
+        console.log('QuizPage: Mapped questions:', mappedQuestions);
+        console.log('QuizPage: First mapped question structure:', mappedQuestions[0]);
+        setQuestions(mappedQuestions);
+      } else {
+        console.error('QuizPage: No items in attempt details:', attemptDetails);
+        setError('Failed to load quiz questions');
+      }
+      
       setSelectedAnswers({});
       setSubmitted(false);
       setResults([]);
+      setCurrentQuestionIndex(0);
+      setTimeSpent({});
+      setStartTime(new Date());
+      
       // Smooth scroll to questions area
       setTimeout(() => document.getElementById('quiz-area')?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Failed to fetch questions');
+      console.error('QuizPage: Error starting quiz:', err);
+      setError(err?.response?.data?.message || err.message || 'Failed to start quiz');
     } finally {
       setLoading(false);
     }
@@ -61,30 +125,86 @@ const QuizPage: React.FC = () => {
     setSelectedAnswers(prev => ({ ...prev, [questionId]: answer }));
   };
 
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+      setStartTime(new Date());
+    }
+  };
+
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+      setStartTime(new Date());
+    }
+  };
+
   const handleSubmitQuiz = async () => {
-    if (Object.keys(selectedAnswers).length < questions.length) {
-      setError('Please answer all questions before submitting');
-      // Scroll to first unanswered
-      const firstUnanswered = questions.find((q: Question) => !selectedAnswers[q._id]);
-      if (firstUnanswered) document.getElementById(`q-${firstUnanswered._id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    console.log('QuizPage: handleSubmitQuiz called');
+    if (!currentAttempt) {
+      console.log('QuizPage: No current attempt');
       return;
     }
+    
+    if (Object.keys(selectedAnswers).length < questions.length) {
+      setError('Please answer all questions before submitting');
+      return;
+    }
+
+    console.log('QuizPage: Starting quiz submission...');
     setLoading(true);
     try {
-      const quizResults = questions.map((q: Question) => {
-        const isCorrect = selectedAnswers[q._id] === q.correctAnswer;
+      // Submit all answers to the backend
+      console.log('QuizPage: Submitting answers...');
+      const answerPromises = questions.map(async (question, index) => {
+        console.log(`QuizPage: Processing question ${index + 1}:`, question);
+        const itemId = question.questionId;
+        const answer = selectedAnswers[itemId];
+        const questionTimeSpent = timeSpent[itemId] || 0;
+        
+        console.log(`QuizPage: Saving answer for item ${itemId}:`, { answer, timeSpent: questionTimeSpent });
+        
+        // Save each answer individually
+        const result = await quizAPI.saveAnswer(
+          currentAttempt.attemptId,
+          itemId,
+          {
+            answer,
+            timeSpent: questionTimeSpent,
+            hintsUsed: 0 // Could be tracked if hints are implemented
+          }
+        );
+        
+        console.log(`QuizPage: Answer saved for item ${itemId}:`, result);
+        
         return {
-          questionId: q._id,
-          question: q.questionText,
-          userAnswer: selectedAnswers[q._id],
-          correctAnswer: q.correctAnswer,
-          isCorrect
+          questionId: itemId,
+          question: question.question.content.stem,
+          userAnswer: answer,
+          isCorrect: result.isCorrect,
+          score: result.score,
+          timeSpent: questionTimeSpent
         };
       });
+
+      console.log('QuizPage: Waiting for all answers to be saved...');
+      const quizResults = await Promise.all(answerPromises);
+      console.log('QuizPage: All answers saved:', quizResults);
+      
+      // Submit the completed attempt
+      console.log('QuizPage: Submitting completed attempt...');
+      const finalResult = await quizAPI.submitQuizAttempt(currentAttempt.attemptId);
+      console.log('QuizPage: Attempt submitted:', finalResult);
+      
       setResults(quizResults);
       setSubmitted(true);
+      
+      // Note: Dashboard refresh removed to avoid circular dependency
+      // Progress will be updated when user returns to dashboard
+      
       setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
     } catch (err: any) {
+      console.error('QuizPage: Error in handleSubmitQuiz:', err);
       setError(err?.response?.data?.message || err.message || 'Failed to submit quiz');
     } finally {
       setLoading(false);
@@ -92,12 +212,18 @@ const QuizPage: React.FC = () => {
   };
 
   const resetQuiz = () => {
+    setCurrentAttempt(null);
     setQuestions([]);
     setSelectedAnswers({});
     setSubmitted(false);
     setResults([]);
     setError(null);
+    setCurrentQuestionIndex(0);
+    setTimeSpent({});
+    setStartTime(null);
   };
+
+  const getQuestionNumber = (index: number) => index + 1;
 
   return (
     <Container maxWidth="md" sx={{ pb: 10 }}>
@@ -122,11 +248,11 @@ const QuizPage: React.FC = () => {
               Start a Quiz!
             </Typography>
             <Typography variant="body1" color="text.secondary" paragraph>
-              Get AI-generated questions, real-time feedback, and adaptive difficulty.
+              Get AI-generated questions, real-time feedback, and track your progress.
             </Typography>
             <Stack direction="row" spacing={1} justifyContent="center" mb={3} flexWrap="wrap">
               <Chip label="AI-Generated" color="primary" variant="outlined" />
-              <Chip label="Adaptive Difficulty" color="secondary" variant="outlined" />
+              <Chip label="Progress Tracking" color="secondary" variant="outlined" />
               <Chip label="Instant Feedback" color="success" variant="outlined" />
             </Stack>
             <Button
@@ -150,194 +276,169 @@ const QuizPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Questions */}
+      {/* Quiz Progress */}
       {questions.length > 0 && !submitted && !loading && (
         <Box id="quiz-area">
-          <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', mt: 2 }}>
+          <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', mb: 2 }}>
             <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                <Typography variant="h5" fontWeight={700}>Quiz Questions</Typography>
-                <Chip
-                  label={`Answered ${answeredCount}/${questions.length}`}
-                  color={answeredCount === questions.length ? 'success' : 'default'}
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                <Typography variant="h6" fontWeight={600}>
+                  Question {currentQuestionIndex + 1} of {questions.length}
+                </Typography>
+                <Chip 
+                  icon={<Timer />} 
+                  label={`${timeSpent[currentQuestion?.questionId] || 0}s`}
                   variant="outlined"
                 />
-              </Stack>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Select one option per question and submit when ready.
+              </Box>
+               
+              <LinearProgress 
+                variant="determinate" 
+                value={progress} 
+                sx={{ height: 8, borderRadius: 4, mb: 2 }}
+              />
+               
+              <Typography variant="body2" color="text.secondary">
+                {answeredCount} of {questions.length} questions answered
               </Typography>
-              <Divider sx={{ mb: 2 }} />
-
-              <Stack spacing={2}>
-                {questions.map((q: Question, idx: number) => {
-                  const selected = selectedAnswers[q._id];
-                  const unanswered = !selected && answeredCount > 0;
-                  return (
-                    <Card
-                      id={`q-${q._id}`}
-                      key={q._id}
-                      variant="outlined"
-                      sx={{
-                        borderRadius: 2,
-                        transition: 'box-shadow 0.2s, border-color 0.2s',
-                        borderColor: unanswered ? 'warning.light' : 'divider',
-                        '&:hover': { boxShadow: 2, borderColor: 'primary.light' }
-                      }}
-                    >
-                      <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-                        <Stack direction="row" alignItems="center" spacing={1} mb={1}>
-                          <Chip size="small" label={`Q${idx + 1}`} color="primary" variant="filled" />
-                          {q.difficulty && (
-                            <Chip
-                              size="small"
-                              label={q.difficulty}
-                              color={q.difficulty === 'easy' ? 'success' : q.difficulty === 'hard' ? 'error' : 'warning'}
-                              variant="outlined"
-                            />
-                          )}
-                          {q.topic && <Chip size="small" label={q.topic} variant="outlined" />}
-                        </Stack>
-
-                        <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 700 }}>
-                          <MathJaxRenderer 
-                            content={q.questionText} 
-                            displayMode="block"
-                            showLoading={false}
-                          />
-                        </Typography>
-
-                        <FormControl component="fieldset" sx={{ width: '100%' }}>
-                          <RadioGroup
-                            value={selected || ''}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAnswerSelect(q._id, e.target.value)}
-                          >
-                            {q.options && Array.isArray(q.options) && q.options.map((option: string, optionIdx: number) => (
-                              <FormControlLabel
-                                key={optionIdx}
-                                value={option}
-                                control={<MuiRadio color="primary" />}
-                                label={
-                                  <MathJaxRenderer 
-                                    content={option} 
-                                    displayMode="inline"
-                                    showLoading={false}
-                                  />
-                                }
-                                sx={{
-                                  mx: 0,
-                                  my: 0.5,
-                                  p: 1,
-                                  borderRadius: 1.5,
-                                  border: '1px solid',
-                                  borderColor: selected === option ? 'primary.main' : 'divider',
-                                  backgroundColor: selected === option ? 'action.selected' : 'background.paper',
-                                  transition: 'all 0.15s',
-                                  '&:hover': {
-                                    backgroundColor: 'action.hover',
-                                  },
-                                }}
-                              />
-                            ))}
-                          </RadioGroup>
-                        </FormControl>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </Stack>
             </CardContent>
           </Card>
+        </Box>
+      )}
 
-          {/* Sticky action bar */}
-          <Box
-            sx={{
-              position: 'sticky',
-              bottom: 0,
-              mt: 2,
-              py: 1.5,
-              px: { xs: 2, sm: 3 },
-              backgroundColor: 'background.paper',
-              borderTop: '1px solid',
-              borderColor: 'divider',
-              boxShadow: 3,
-              borderRadius: 2,
-            }}
-          >
-            <Stack direction={{ xs: 'column', sm: 'row' }} alignItems="center" justifyContent="space-between" spacing={1}>
-              <Typography variant="body2" color="text.secondary">
-                {answeredCount < questions.length
-                  ? `Answer all questions to enable submission (${answeredCount}/${questions.length})`
-                  : 'All questions answered. Ready to submit.'}
+      {/* Current Question */}
+      {currentQuestion && !submitted && !loading && (
+        <Card elevation={2} sx={{ borderRadius: 3, mb: 2 }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box mb={3}>
+              <Typography variant="h5" fontWeight={700} gutterBottom>
+                Question {currentQuestionIndex + 1} of {questions.length}
               </Typography>
-              <Stack direction="row" spacing={1}>
-                <Button variant="text" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                  Back to Top
-                </Button>
+            
+            <Typography variant="body1" paragraph>
+              {currentQuestion?.question?.content?.stem || 'Question not available'}
+            </Typography>
+               
+              <FormControl component="fieldset" fullWidth>
+                <FormLabel component="legend">Select your answer:</FormLabel>
+                <RadioGroup
+                  value={selectedAnswers[currentQuestion?.questionId] || ''}
+                  onChange={(e) => handleAnswerSelect(currentQuestion?.questionId, e.target.value)}
+                >
+                  {currentQuestion?.question?.content?.options?.map((option) => (
+                    <FormControlLabel
+                      key={option.id}
+                      value={option.text}
+                      control={<MuiRadio />}
+                      label={option.text}
+                      sx={{ 
+                        border: '1px solid',
+                        borderColor: selectedAnswers[currentQuestion?.questionId] === option.text 
+                          ? 'primary.main' 
+                          : 'divider',
+                        borderRadius: 2,
+                        px: 2,
+                        py: 1,
+                        mb: 1,
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          bgcolor: 'action.hover'
+                        }
+                      }}
+                    />
+                  )) || <Typography>No options available</Typography>}
+                </RadioGroup>
+              </FormControl>
+            </Box>
+
+            {/* Navigation */}
+            <Box display="flex" justifyContent="space-between">
+              <Button
+                variant="outlined"
+                onClick={handlePreviousQuestion}
+                disabled={currentQuestionIndex === 0}
+              >
+                Previous
+              </Button>
+               
+              {currentQuestionIndex === questions.length - 1 ? (
                 <Button
                   variant="contained"
-                  size="large"
                   onClick={handleSubmitQuiz}
-                  disabled={answeredCount < questions.length || loading}
+                  disabled={Object.keys(selectedAnswers).length < questions.length}
+                  startIcon={<Check />}
                 >
                   Submit Quiz
                 </Button>
-              </Stack>
-            </Stack>
-          </Box>
-        </Box>
+              ) : (
+                <Button
+                  variant="contained"
+                  onClick={handleNextQuestion}
+                  disabled={!selectedAnswers[currentQuestion.questionId]}
+                >
+                  Next Question
+                </Button>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
       )}
 
       {/* Results */}
       {submitted && results.length > 0 && (
-        <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', mt: 2 }}>
+        <Card elevation={2} sx={{ borderRadius: 3, mt: 2 }}>
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+            <Box display="flex" alignItems="center" gap={2} mb={3}>
               <Check color="success" />
-              <Typography variant="h5" fontWeight={700}>Quiz Results</Typography>
-            </Stack>
+              <Typography variant="h5" fontWeight={700}>
+                Quiz Completed!
+              </Typography>
+            </Box>
+            
+            <Typography variant="body1" color="text.secondary" paragraph>
+              Your answers have been saved and progress has been updated. Check your dashboard to see your improvement!
+            </Typography>
+
+            <Divider sx={{ my: 2 }} />
+            
+            <Typography variant="h6" gutterBottom>Results Summary:</Typography>
             <Stack spacing={2}>
-              {results.map((r: QuizResult, idx: number) => (
-                <Card
-                  key={idx}
-                  variant="outlined"
-                  sx={{
-                    borderRadius: 2,
-                    borderColor: r.isCorrect ? 'success.light' : 'error.light',
-                    backgroundColor: r.isCorrect ? 'success.lighter' : 'error.lighter'
-                  }}
+              {results.map((result, index) => (
+                <Box
+                  key={index}
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  p={2}
+                  bgcolor="background.default"
+                  borderRadius={2}
                 >
-                  <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-                    <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                      Q{idx + 1}: <MathJaxRenderer content={r.question} displayMode="inline" showLoading={false} />
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight="bold">
+                      Question {index + 1}
                     </Typography>
-                    <Typography color={r.isCorrect ? 'success.main' : 'error.main'}>
-                      Your Answer: <MathJaxRenderer content={r.userAnswer} displayMode="inline" showLoading={false} />
+                    <Typography variant="body2" color="text.secondary">
+                      Time: {result.timeSpent}s
                     </Typography>
-                    <Typography color="text.secondary">
-                      Correct Answer: <MathJaxRenderer content={r.correctAnswer} displayMode="inline" showLoading={false} />
-                    </Typography>
-                    <Typography
-                      color={r.isCorrect ? 'success.main' : 'error.main'}
-                      sx={{ mt: 1, fontWeight: 700 }}
-                    >
-                      {r.isCorrect ? '✓ Correct!' : '✗ Incorrect'}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                  </Box>
+                  <Chip
+                    label={result.isCorrect ? 'Correct' : 'Incorrect'}
+                    color={result.isCorrect ? 'success' : 'error'}
+                    size="small"
+                  />
+                </Box>
               ))}
             </Stack>
 
-            <Divider sx={{ my: 2 }} />
-
-            <Stack alignItems="center" spacing={2}>
-              <Typography variant="h6" fontWeight={800}>
-                Score: {results.filter((r: QuizResult) => r.isCorrect).length}/{results.length} (
-                {Math.round((results.filter((r: QuizResult) => r.isCorrect).length / results.length) * 100)}%)
-              </Typography>
-              <Button variant="contained" size="large" onClick={resetQuiz}>
+            <Box display="flex" justifyContent="center" mt={3}>
+              <Button
+                variant="contained"
+                onClick={resetQuiz}
+                startIcon={<PlayArrow />}
+              >
                 Take Another Quiz
               </Button>
-            </Stack>
+            </Box>
           </CardContent>
         </Card>
       )}

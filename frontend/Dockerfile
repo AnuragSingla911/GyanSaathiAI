@@ -20,8 +20,8 @@ FROM nginx:alpine
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration if it exists
-# COPY nginx.conf /etc/nginx/nginx.conf
+# Copy nginx configuration for SPA routing
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Nginx user already exists in nginx:alpine, no need to create
 
