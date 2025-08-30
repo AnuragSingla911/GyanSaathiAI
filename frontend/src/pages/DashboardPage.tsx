@@ -17,7 +17,6 @@ import {
   TrendingUp,
   Quiz,
   EmojiEvents,
-  AccessTime,
   School,
   PlayArrow,
 } from '@mui/icons-material';
@@ -36,11 +35,11 @@ const DashboardPage: React.FC = () => {
   console.log('DashboardPage: Hooks initialized', { user, stats, loading, error });
 
   useEffect(() => {
-    console.log('DashboardPage: useEffect triggered', { userId: user?.id });
-    if (user?.id) {
+    console.log('DashboardPage: useEffect triggered', { userId: user?.user_id });
+    if (user?.user_id) {
       refreshDashboard();
     }
-  }, [user?.id, refreshDashboard]);
+  }, [user?.user_id, refreshDashboard]);
 
   console.log('DashboardPage: Before conditional renders', { loading, error, stats });
 
@@ -107,7 +106,7 @@ const DashboardPage: React.FC = () => {
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={8}>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
-              Welcome back, {user?.firstName || user?.username}! 👋
+              Welcome back, {user?.email}! 👋
             </Typography>
             <Typography variant="h6" sx={{ opacity: 0.9 }}>
               Ready to continue your learning journey? You're doing great!

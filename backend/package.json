@@ -27,7 +27,10 @@
     "bull": "^4.12.9",
     "@opentelemetry/api": "^1.8.0",
     "@opentelemetry/sdk-node": "^0.51.0",
-    "@opentelemetry/instrumentation": "^0.51.0"
+    "@opentelemetry/instrumentation": "^0.51.0",
+    "apollo-server-express": "^3.13.0",
+    "graphql": "^16.8.1",
+    "graphql-tag": "^2.12.6"
   },
   "devDependencies": {
     "nodemon": "^3.1.0",

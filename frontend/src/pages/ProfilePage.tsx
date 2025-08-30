@@ -1,6 +1,12 @@
 import React from 'react';
-import { Box, Typography, Card, CardContent, Chip } from '@mui/material';
-import { Person, Settings, AccountCircle } from '@mui/icons-material';
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Chip,
+} from '@mui/material';
+import { Person, AccountCircle } from '@mui/icons-material';
 
 const ProfilePage: React.FC = () => {
   return (

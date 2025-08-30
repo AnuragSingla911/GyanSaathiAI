@@ -68,25 +68,15 @@ const MathJaxRenderer: React.FC<MathJaxRendererProps> = ({
   }, [content, retryCount]);
 
   // Function to process content and wrap math expressions
-  const processContent = (text: string): string => {
-    if (!text) return '';
-    
-    let processed = text;
-    
-    // Handle inline math with $...$ (but not $$...$$)
-    processed = processed.replace(/(?<!\$)\$([^$]+?)\$(?!\$)/g, (match, math) => {
-      return `\\(${math}\\)`;
+  const processMathContent = (content: string) => {
+    return content.replace(/\$\$(.*?)\$\$/g, (_, mathContent) => {
+      return `<div class="math-display">${mathContent}</div>`;
+    }).replace(/\$(.*?)\$/g, (_, mathContent) => {
+      return `<span class="math-inline">${mathContent}</span>`;
     });
-    
-    // Handle display math with $$...$$
-    processed = processed.replace(/\$\$([^$]+?)\$\$/g, (match, math) => {
-      return `\\[${math}\\]`;
-    });
-    
-    return processed;
   };
 
-  const processedContent = processContent(content);
+  const processedContent = processMathContent(content);
   const displayClass = displayMode === 'block' ? 'math-display' : 'math-inline';
 
   const handleRetry = () => {

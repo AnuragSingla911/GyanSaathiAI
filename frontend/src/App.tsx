@@ -62,12 +62,12 @@ const ProtectedRoutes: React.FC = () => {
   
   console.log('ProtectedRoutes: Auth state', { 
     user, 
-    userId: user?.id,
+    userId: user?.user_id,
     userKeys: user ? Object.keys(user) : 'no user',
     userStringified: JSON.stringify(user, null, 2)
   });
   
-  if (!user?.id) {
+  if (!user?.user_id) {
     console.log('ProtectedRoutes: No user id, returning null');
     return null;
   }
@@ -75,7 +75,7 @@ const ProtectedRoutes: React.FC = () => {
   console.log('ProtectedRoutes: User has id, rendering DashboardProvider and Layout');
   
   return (
-    <DashboardProvider userId={user.id}>
+    <DashboardProvider userId={user.user_id}>
       <Layout />
     </DashboardProvider>
   );

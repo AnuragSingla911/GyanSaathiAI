@@ -10,6 +10,7 @@ const { connectPostgres } = require('./utils/database');
 const { connectMongoDB } = require('./utils/mongodb');
 const { connectRedis } = require('./utils/redis');
 const errorHandler = require('./middleware/errorHandler');
+const { createApolloServer } = require('./graphql/server');
 // const traceMiddleware = require('./middleware/trace');
 
 // Route imports (using original routes temporarily)
@@ -61,16 +62,13 @@ app.use('/api/v1/quiz-attempts', quizRoutes);
 app.use('/api/v1/progress', progressRoutes);
 app.use('/api/v1/health', healthRoutes);
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found'
-  });
+// GraphQL endpoint
+app.use('/graphql', (req, res, next) => {
+  // Add CORS headers for GraphQL
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  next();
 });
-
-// Global error handler
-app.use(errorHandler);
 
 // Database connections and server startup
 async function startServer() {
@@ -82,10 +80,40 @@ async function startServer() {
     
     console.log('✅ All database connections established');
     
+    // Create and start Apollo Server
+    const apolloServer = createApolloServer();
+    await apolloServer.start();
+    
+    // Apply Apollo Server middleware to Express app
+    apolloServer.applyMiddleware({ 
+      app, 
+      path: '/graphql',
+      cors: {
+        origin: process.env.NODE_ENV === 'production' 
+          ? process.env.FRONTEND_URL 
+          : ['http://localhost:3000', 'http://localhost:80', 'http://localhost'],
+        credentials: true
+      }
+    });
+    
+    console.log('🚀 GraphQL server ready at /graphql');
+    
+    // 404 handler (moved after GraphQL setup)
+    app.use('*', (req, res) => {
+      res.status(404).json({
+        success: false,
+        message: 'Route not found'
+      });
+    });
+    
+    // Global error handler
+    app.use(errorHandler);
+    
     // Start server
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
       console.log(`📊 Health check: http://localhost:${PORT}/api/v1/health`);
+      console.log(`🔍 GraphQL Playground: http://localhost:${PORT}/graphql`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);

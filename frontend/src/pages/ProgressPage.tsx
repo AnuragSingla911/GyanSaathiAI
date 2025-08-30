@@ -1,6 +1,12 @@
 import React from 'react';
-import { Box, Typography, Card, CardContent, Chip } from '@mui/material';
-import { TrendingUp, Analytics, Assessment } from '@mui/icons-material';
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Chip,
+} from '@mui/material';
+import { TrendingUp, Assessment } from '@mui/icons-material';
 
 const ProgressPage: React.FC = () => {
   return (

@@ -48,7 +48,7 @@ services:
       - tutor_network
     command: redis-server --appendonly yes
 
-  # Backend API with v1 routes, auth, and progress tracking
+  # Backend API with v1 routes, auth, progress tracking, and GraphQL
   backend:
     build:
       context: ./backend
@@ -121,7 +121,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # Frontend React App
+  # Frontend React App with GraphQL support
   frontend:
     build:
       context: ./frontend
@@ -129,6 +129,7 @@ services:
     container_name: tutor_frontend
     environment:
       VITE_API_URL: http://localhost:5000/api
+      VITE_GRAPHQL_URL: http://localhost:5000/graphql
       VITE_AGENT_URL: http://localhost:8000
     ports:
       - "3000:80"

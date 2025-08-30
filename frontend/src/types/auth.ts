@@ -1,14 +1,9 @@
 export interface User {
-  id: string;
-  username: string;
+  user_id: string;
   email: string;
-  firstName: string;
-  lastName: string;
-  role: 'student' | 'admin' | 'teacher';
-  gradeLevel: number;
-  emailVerified: boolean;
-  preferences?: UserPreferences;
-  createdAt: string;
+  role: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface UserPreferences {
@@ -26,13 +21,9 @@ export interface LoginCredentials {
 }
 
 export interface RegisterData {
-  username: string;
   email: string;
   password: string;
-  firstName: string;
-  lastName: string;
-  gradeLevel: number;
-  preferredSubjects?: string[];
+  confirmPassword: string;
 }
 
 export interface AuthResponse {

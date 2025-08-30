@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
 import toast from 'react-hot-toast';
 
-import { authAPI } from '../services/api';
+import { useAuthAPI } from '../services/graphqlApi';
 import { User, LoginCredentials, RegisterData } from '../types/auth';
 
 interface AuthContextType {
@@ -28,28 +27,18 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const queryClient = useQueryClient();
+  
+  const {
+    login: loginMutation,
+    register: registerMutation,
+    getCurrentUser,
+    updateProfile: updateProfileMutation,
+    logout: logoutMutation,
+    loading: apiLoading
+  } = useAuthAPI();
 
   // Check if user is authenticated on mount
-  const { data: userData, isLoading } = useQuery(
-    'currentUser',
-    authAPI.getCurrentUser,
-    {
-      retry: false,
-      onSuccess: (data) => {
-        setUser(data.user);
-        setLoading(false);
-      },
-      onError: () => {
-        setUser(null);
-        setLoading(false);
-        // Remove token if it exists but is invalid
-        localStorage.removeItem('token');
-      },
-      // Only fetch if we have a token
-      enabled: !!localStorage.getItem('token'),
-    }
-  );
+  const { data: userData, loading: userLoading, error: userError } = getCurrentUser();
 
   // Initialize loading state
   useEffect(() => {
@@ -58,83 +47,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Login mutation
-  const loginMutation = useMutation(authAPI.login, {
-    onSuccess: (data) => {
-      localStorage.setItem('token', data.token);
-      setUser(data.user);
-      queryClient.setQueryData('currentUser', data);
-      toast.success('Welcome back!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Login failed');
-      throw error;
-    },
-  });
-
-  // Register mutation
-  const registerMutation = useMutation(authAPI.register, {
-    onSuccess: (data) => {
-      localStorage.setItem('token', data.token);
-      setUser(data.user);
-      queryClient.setQueryData('currentUser', data);
-      toast.success('Account created successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Registration failed');
-      throw error;
-    },
-  });
-
-  // Logout mutation
-  const logoutMutation = useMutation(authAPI.logout, {
-    onSuccess: () => {
-      localStorage.removeItem('token');
+  // Handle user data changes
+  useEffect(() => {
+    if (userData?.me) {
+      setUser(userData.me);
+      setLoading(false);
+    } else if (userError) {
       setUser(null);
-      queryClient.clear();
-      toast.success('Logged out successfully');
-    },
-    onError: () => {
-      // Even if logout fails on server, clear local state
+      setLoading(false);
+      // Remove token if it exists but is invalid
       localStorage.removeItem('token');
-      setUser(null);
-      queryClient.clear();
-      toast.success('Logged out successfully');
-    },
-  });
-
-  // Update profile mutation
-  const updateProfileMutation = useMutation(authAPI.updateProfile, {
-    onSuccess: (data) => {
-      setUser(data.user);
-      queryClient.setQueryData('currentUser', data);
-      toast.success('Profile updated successfully');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to update profile');
-      throw error;
-    },
-  });
+    }
+  }, [userData, userError]);
 
   const login = async (credentials: LoginCredentials) => {
-    await loginMutation.mutateAsync(credentials);
+    try {
+      const result = await loginMutation(credentials);
+      setUser(result.user);
+      toast.success('Welcome back!');
+    } catch (error: any) {
+      toast.error(error.message || 'Login failed');
+      throw error;
+    }
   };
 
   const register = async (data: RegisterData) => {
-    await registerMutation.mutateAsync(data);
+    try {
+      const result = await registerMutation(data);
+      setUser(result.user);
+      toast.success('Account created successfully!');
+    } catch (error: any) {
+      toast.error(error.message || 'Registration failed');
+      throw error;
+    }
   };
 
   const logout = async () => {
-    await logoutMutation.mutateAsync();
+    try {
+      await logoutMutation();
+      setUser(null);
+      toast.success('Logged out successfully');
+    } catch (error) {
+      // Even if logout fails on server, clear local state
+      setUser(null);
+      toast.success('Logged out successfully');
+    }
   };
 
   const updateProfile = async (data: Partial<User>) => {
-    await updateProfileMutation.mutateAsync(data);
+    try {
+      const result = await updateProfileMutation(data);
+      setUser(result.user);
+      toast.success('Profile updated successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update profile');
+      throw error;
+    }
   };
 
   const value: AuthContextType = {
     user,
-    loading: loading || isLoading,
+    loading: loading || userLoading || apiLoading.login || apiLoading.register || apiLoading.updateProfile || apiLoading.logout,
     login,
     register,
     logout,

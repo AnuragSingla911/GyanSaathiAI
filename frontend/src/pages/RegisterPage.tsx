@@ -1,20 +1,15 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
+  Container,
   Box,
-  Card,
-  CardContent,
+  Typography,
   TextField,
   Button,
-  Typography,
-  Container,
-  Alert,
+  Card,
+  CardContent,
   Grid,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Select,
-  Chip,
+  Alert,
 } from '@mui/material';
 import { School } from '@mui/icons-material';
 import { useFormik } from 'formik';
@@ -23,63 +18,37 @@ import * as yup from 'yup';
 import { useAuth } from '../contexts/AuthContext';
 
 const validationSchema = yup.object({
-  username: yup.string().min(3, 'Username must be at least 3 characters').required('Username is required'),
-  email: yup.string().email('Enter a valid email').required('Email is required'),
+  email: yup.string().email('Invalid email address').required('Email is required'),
   password: yup.string().min(6, 'Password must be at least 6 characters').required('Password is required'),
-  firstName: yup.string().required('First name is required'),
-  lastName: yup.string().required('Last name is required'),
-  gradeLevel: yup.number().min(6, 'Grade must be between 6-10').max(10, 'Grade must be between 6-10').required('Grade level is required'),
+  confirmPassword: yup.string().oneOf([yup.ref('password')], 'Passwords must match').required('Please confirm your password'),
 });
-
-const subjects = [
-  'math',
-  'science',
-  'physics',
-  'chemistry',
-  'biology'
-];
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
 
   const formik = useFormik({
     initialValues: {
-      username: '',
       email: '',
       password: '',
-      firstName: '',
-      lastName: '',
-      gradeLevel: 6,
+      confirmPassword: '',
     },
     validationSchema: validationSchema,
     onSubmit: async (values) => {
       try {
         setError('');
         setLoading(true);
-        await register({
-          ...values,
-          preferredSubjects: selectedSubjects,
-        });
+        await register(values);
         navigate('/dashboard');
       } catch (err: any) {
-        setError(err.response?.data?.message || 'Registration failed');
+        setError(err.message || 'Registration failed');
       } finally {
         setLoading(false);
       }
     },
   });
-
-  const handleSubjectToggle = (subject: string) => {
-    setSelectedSubjects(prev => 
-      prev.includes(subject)
-        ? prev.filter(s => s !== subject)
-        : [...prev, subject]
-    );
-  };
 
   return (
     <Container component="main" maxWidth="md">
@@ -124,51 +93,6 @@ const RegisterPage: React.FC = () => {
 
             <Box component="form" onSubmit={formik.handleSubmit} sx={{ mt: 1 }}>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    required
-                    fullWidth
-                    id="firstName"
-                    label="First Name"
-                    name="firstName"
-                    autoComplete="given-name"
-                    value={formik.values.firstName}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={formik.touched.firstName && Boolean(formik.errors.firstName)}
-                    helperText={formik.touched.firstName && formik.errors.firstName}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    required
-                    fullWidth
-                    id="lastName"
-                    label="Last Name"
-                    name="lastName"
-                    autoComplete="family-name"
-                    value={formik.values.lastName}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={formik.touched.lastName && Boolean(formik.errors.lastName)}
-                    helperText={formik.touched.lastName && formik.errors.lastName}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    required
-                    fullWidth
-                    id="username"
-                    label="Username"
-                    name="username"
-                    autoComplete="username"
-                    value={formik.values.username}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    error={formik.touched.username && Boolean(formik.errors.username)}
-                    helperText={formik.touched.username && formik.errors.username}
-                  />
-                </Grid>
                 <Grid item xs={12}>
                   <TextField
                     required
@@ -200,42 +124,21 @@ const RegisterPage: React.FC = () => {
                     helperText={formik.touched.password && formik.errors.password}
                   />
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel id="grade-level-label">Grade Level</InputLabel>
-                    <Select
-                      labelId="grade-level-label"
-                      id="gradeLevel"
-                      name="gradeLevel"
-                      value={formik.values.gradeLevel}
-                      label="Grade Level"
-                      onChange={formik.handleChange}
-                      error={formik.touched.gradeLevel && Boolean(formik.errors.gradeLevel)}
-                    >
-                      {[6, 7, 8, 9, 10].map((grade) => (
-                        <MenuItem key={grade} value={grade}>
-                          Grade {grade}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Preferred Subjects (Optional)
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {subjects.map((subject) => (
-                      <Chip
-                        key={subject}
-                        label={subject.charAt(0).toUpperCase() + subject.slice(1)}
-                        onClick={() => handleSubjectToggle(subject)}
-                        color={selectedSubjects.includes(subject) ? 'primary' : 'default'}
-                        variant={selectedSubjects.includes(subject) ? 'filled' : 'outlined'}
-                        clickable
-                      />
-                    ))}
-                  </Box>
+                  <TextField
+                    required
+                    fullWidth
+                    name="confirmPassword"
+                    label="Confirm Password"
+                    type="password"
+                    id="confirmPassword"
+                    autoComplete="new-password"
+                    value={formik.values.confirmPassword}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={formik.touched.confirmPassword && Boolean(formik.errors.confirmPassword)}
+                    helperText={formik.touched.confirmPassword && formik.errors.confirmPassword}
+                  />
                 </Grid>
               </Grid>
               <Button
@@ -250,11 +153,11 @@ const RegisterPage: React.FC = () => {
               <Box textAlign="center">
                 <Typography variant="body2">
                   Already have an account?{' '}
-                  <Link to="/login" style={{ textDecoration: 'none' }}>
+                  {/* <Link to="/login" style={{ textDecoration: 'none' }}> */}
                     <Button variant="text" size="small">
                       Sign in here
                     </Button>
-                  </Link>
+                  {/* </Link> */}
                 </Typography>
               </Box>
             </Box>

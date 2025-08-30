@@ -27,7 +27,6 @@ import {
   TrendingUp,
   Person,
   Logout,
-  Settings,
   School,
 } from '@mui/icons-material';
 
@@ -151,7 +150,7 @@ const Layout: React.FC = () => {
           </Typography>
           <Box display="flex" alignItems="center" gap={1}>
             <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              {user?.firstName} {user?.lastName}
+              {user?.email}
             </Typography>
             <IconButton
               size="large"
@@ -164,10 +163,9 @@ const Layout: React.FC = () => {
             >
               <Avatar
                 sx={{ width: 32, height: 32 }}
-                alt={`${user?.firstName} ${user?.lastName}`}
-                src={user?.profileImage}
+                alt={user?.email}
               >
-                {user?.firstName?.[0]}{user?.lastName?.[0]}
+                {user?.email?.[0]?.toUpperCase()}
               </Avatar>
             </IconButton>
           </Box>
@@ -215,12 +213,6 @@ const Layout: React.FC = () => {
             <Person fontSize="small" />
           </ListItemIcon>
           Profile
-        </MenuItem>
-        <MenuItem onClick={() => handleNavigation('/settings')}>
-          <ListItemIcon>
-            <Settings fontSize="small" />
-          </ListItemIcon>
-          Settings
         </MenuItem>
         <Divider />
         <MenuItem onClick={handleLogout}>
@@ -275,7 +267,6 @@ const Layout: React.FC = () => {
         }}
       >
         <Toolbar />
-        {console.log('Layout: About to render Outlet')}
         <Outlet />
       </Box>
     </Box>

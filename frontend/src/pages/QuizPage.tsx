@@ -1,14 +1,33 @@
 
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@apollo/client';
 import {
-  Box, Container, Typography, Card, CardContent, Button, Chip, CircularProgress,
-  Alert, RadioGroup, FormControlLabel, FormControl, FormLabel, Stack, Divider,
-  LinearProgress
+  Container,
+  Box,
+  Typography,
+  Button,
+  Card,
+  CardContent,
+  Alert,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio as MuiRadio,
+  Chip,
+  Stack,
+  Divider,
+  CircularProgress,
+  LinearProgress,
 } from '@mui/material';
-import { Radio as MuiRadio } from '@mui/material';
-import { Quiz, PlayArrow, Check, Timer, School } from '@mui/icons-material';
-import { quizAPI } from '../services/api';
-import MathJaxRenderer from '../components/MathJaxRenderer';
+import {
+  Quiz,
+  PlayArrow,
+  Check,
+  Timer,
+} from '@mui/icons-material';
+import { useQuizAPI } from '../services/graphqlApi';
+import { GET_QUIZ_ATTEMPT } from '../graphql/operations';
 
 interface Question {
   questionId: string;
@@ -32,6 +51,7 @@ interface QuizAttempt {
 }
 
 const QuizPage: React.FC = () => {
+  const { startQuizAttempt, saveAnswer, submitQuizAttempt } = useQuizAPI();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentAttempt, setCurrentAttempt] = useState<QuizAttempt | null>(null);
@@ -43,9 +63,115 @@ const QuizPage: React.FC = () => {
   const [timeSpent, setTimeSpent] = useState<{ [key: string]: number }>({});
   const [startTime, setStartTime] = useState<Date | null>(null);
   
+  // GraphQL query for quiz attempt details
+  const { data: attemptDetails, error: attemptError } = useQuery(GET_QUIZ_ATTEMPT, {
+    variables: { attemptId: currentAttempt?.attemptId || '' },
+    skip: !currentAttempt?.attemptId,
+    fetchPolicy: 'no-cache', // Disable caching to prevent reference sharing issues
+    errorPolicy: 'all'
+  });
+  
   const currentQuestion = questions[currentQuestionIndex];
   const answeredCount = Object.keys(selectedAnswers).length;
   const progress = (answeredCount / questions.length) * 100;
+
+  // Effect to handle quiz attempt data changes
+  useEffect(() => {
+    if (attemptDetails?.quizAttempt?.items) {
+      console.log('QuizPage: Raw GraphQL response received:', attemptDetails);
+      
+      // Debug: Log the raw data before any processing
+      console.log('QuizPage: Raw items before mapping:', attemptDetails.quizAttempt.items);
+      
+      // Debug: Check each item's options before any processing
+      attemptDetails.quizAttempt.items.forEach((item: any, index: number) => {
+        console.log(`QuizPage: Raw item ${index} options:`, {
+          item_id: item.item_id,
+          questionId: item.question?.id,
+          stem: item.question?.stem,
+          rawOptions: item.question?.options,
+          optionsLength: item.question?.options?.length,
+          firstOption: item.question?.options?.[0],
+          lastOption: item.question?.options?.[item.question?.options?.length - 1]
+        });
+      });
+      
+      console.log('QuizPage: Attempt details structure:', {
+        hasAttempt: !!attemptDetails?.quizAttempt,
+        hasItems: !!attemptDetails?.quizAttempt?.items,
+        itemsLength: attemptDetails?.quizAttempt?.items?.length,
+        firstItem: attemptDetails?.quizAttempt?.items?.[0],
+        firstItemQuestion: attemptDetails?.quizAttempt?.items?.[0]?.question
+      });
+      
+      // Debug: Log each item individually
+      attemptDetails.quizAttempt.items.forEach((item: any, index: number) => {
+        console.log(`QuizPage: Item ${index}:`, {
+          item_id: item.item_id,
+          questionId: item.question?.id,
+          stem: item.question?.stem,
+          options: item.question?.options,
+          optionsLength: item.question?.options?.length,
+          firstOption: item.question?.options?.[0],
+          lastOption: item.question?.options?.[item.question?.options?.length - 1]
+        });
+      });
+      
+      const mappedQuestions = attemptDetails.quizAttempt.items.map((item: any, index: number) => {
+        // Create a deep copy of the question to avoid reference sharing issues
+        const questionCopy = {
+          ...item.question,
+          options: item.question.options ? [...item.question.options.map((opt: any) => ({ ...opt }))] : [],
+          correctOptionIds: item.question.correctOptionIds ? [...item.question.correctOptionIds] : []
+        };
+        
+        const mappedQuestion = {
+          questionId: item.item_id,
+          question: questionCopy,
+          metadata: item.question.metadata || {
+            subject: item.question.subject,
+            topic: item.question.topic,
+            tags: item.question.tags
+          }
+        };
+        
+        console.log(`QuizPage: Mapped question ${index}:`, {
+          questionId: mappedQuestion.questionId,
+          stem: mappedQuestion.question?.stem,
+          options: mappedQuestion.question?.options,
+          optionsLength: mappedQuestion.question?.options?.length,
+          firstOption: mappedQuestion.question?.options?.[0],
+          lastOption: mappedQuestion.question?.options?.[mappedQuestion.question?.options?.length - 1]
+        });
+        
+        return mappedQuestion;
+      });
+      
+      console.log('QuizPage: All mapped questions:', mappedQuestions);
+      setQuestions(mappedQuestions);
+    }
+  }, [attemptDetails]);
+
+  // Debug effect for current question changes
+  useEffect(() => {
+    if (currentQuestion) {
+      console.log('QuizPage: Current question changed:', {
+        questionIndex: currentQuestionIndex,
+        questionId: currentQuestion?.questionId,
+        stem: currentQuestion?.question?.stem,
+        options: currentQuestion?.question?.options,
+        optionsLength: currentQuestion?.question?.options?.length
+      });
+    }
+  }, [currentQuestion, currentQuestionIndex]);
+
+  // Handle attempt errors
+  useEffect(() => {
+    if (attemptError) {
+      console.error('QuizPage: Attempt error:', attemptError);
+      setError(attemptError.message || 'Failed to load quiz attempt');
+    }
+  }, [attemptError]);
 
   // Timer effect
   useEffect(() => {
@@ -69,40 +195,17 @@ const QuizPage: React.FC = () => {
     try {
       // Start a new quiz attempt
       console.log('QuizPage: Calling startQuizAttempt...');
-      const attempt = await quizAPI.startQuizAttempt({
-        subject: 'math', // Default subject - could be made configurable
-        topic: 'algebra',
+      const attempt = await startQuizAttempt({
+        subject: 'Mathematics', // Match the MongoDB question subject
+        topic: 'linear equations', // Match the MongoDB question topic
         totalQuestions: 5
       });
       console.log('QuizPage: Quiz attempt created:', attempt);
 
       setCurrentAttempt(attempt);
       
-      // Get the attempt details with questions
-      console.log('QuizPage: Getting quiz attempt details...');
-      const attemptDetails = await quizAPI.getQuizAttempt(attempt.attemptId);
-      console.log('QuizPage: Attempt details received:', attemptDetails);
-      console.log('QuizPage: Attempt details structure:', {
-        hasAttempt: !!attemptDetails.attempt,
-        hasItems: !!attemptDetails.items,
-        itemsLength: attemptDetails.items?.length,
-        firstItem: attemptDetails.items?.[0],
-        firstItemQuestion: attemptDetails.items?.[0]?.question
-      });
-      
-      if (attemptDetails && attemptDetails.items) {
-        const mappedQuestions = attemptDetails.items.map((item: any) => ({
-          questionId: item.itemId,
-          question: item.question,
-          metadata: item.question.metadata
-        }));
-        console.log('QuizPage: Mapped questions:', mappedQuestions);
-        console.log('QuizPage: First mapped question structure:', mappedQuestions[0]);
-        setQuestions(mappedQuestions);
-      } else {
-        console.error('QuizPage: No items in attempt details:', attemptDetails);
-        setError('Failed to load quiz questions');
-      }
+      // The useQuery hook will automatically fetch the data when currentAttempt changes
+      // No need to manually refetch or add delays
       
       setSelectedAnswers({});
       setSubmitted(false);
@@ -165,7 +268,7 @@ const QuizPage: React.FC = () => {
         console.log(`QuizPage: Saving answer for item ${itemId}:`, { answer, timeSpent: questionTimeSpent });
         
         // Save each answer individually
-        const result = await quizAPI.saveAnswer(
+        const result = await saveAnswer(
           currentAttempt.attemptId,
           itemId,
           {
@@ -179,7 +282,7 @@ const QuizPage: React.FC = () => {
         
         return {
           questionId: itemId,
-          question: question.question.content.stem,
+          question: question.question.stem,
           userAnswer: answer,
           isCorrect: result.isCorrect,
           score: result.score,
@@ -193,7 +296,7 @@ const QuizPage: React.FC = () => {
       
       // Submit the completed attempt
       console.log('QuizPage: Submitting completed attempt...');
-      const finalResult = await quizAPI.submitQuizAttempt(currentAttempt.attemptId);
+      const finalResult = await submitQuizAttempt(currentAttempt.attemptId);
       console.log('QuizPage: Attempt submitted:', finalResult);
       
       setResults(quizResults);
@@ -222,8 +325,6 @@ const QuizPage: React.FC = () => {
     setTimeSpent({});
     setStartTime(null);
   };
-
-  const getQuestionNumber = (index: number) => index + 1;
 
   return (
     <Container maxWidth="md" sx={{ pb: 10 }}>
@@ -316,7 +417,7 @@ const QuizPage: React.FC = () => {
               </Typography>
             
             <Typography variant="body1" paragraph>
-              {currentQuestion?.question?.content?.stem || 'Question not available'}
+              {currentQuestion?.question?.stem || 'Question not available'}
             </Typography>
                
               <FormControl component="fieldset" fullWidth>
@@ -325,9 +426,9 @@ const QuizPage: React.FC = () => {
                   value={selectedAnswers[currentQuestion?.questionId] || ''}
                   onChange={(e) => handleAnswerSelect(currentQuestion?.questionId, e.target.value)}
                 >
-                  {currentQuestion?.question?.content?.options?.map((option) => (
+                  {currentQuestion?.question?.options?.map((option) => (
                     <FormControlLabel
-                      key={option.id}
+                      key={`${currentQuestion?.questionId}-${option.id}`}
                       value={option.text}
                       control={<MuiRadio />}
                       label={option.text}
