@@ -78,8 +78,9 @@ const DashboardPage: React.FC = () => {
 
   console.log('DashboardPage: Rendering main dashboard with stats', stats);
 
-  const accuracy = stats.overall.totalQuestions > 0 
-    ? Math.round((stats.overall.totalCorrect / stats.overall.totalQuestions) * 100) 
+  // Get accuracy from recentActivity since totalQuestions and totalCorrect are not being populated
+  const accuracy = stats.recentActivity && stats.recentActivity.length > 0 
+    ? Math.round(stats.recentActivity[0].accuracy) 
     : 0;
 
   // Get recent subjects from progress data
@@ -95,9 +96,12 @@ const DashboardPage: React.FC = () => {
     date: activity.date,
   }));
 
-  // Calculate weekly progress (simplified - using total questions as weekly goal)
-  const weeklyGoal = Math.max(10, Math.ceil(stats.overall.totalQuestions / 4)); // Dynamic goal
-  const weeklyProgress = Math.min(stats.overall.totalQuestions, weeklyGoal);
+  // Calculate weekly progress using questionsAnswered from recentActivity
+  const totalQuestionsAnswered = stats.recentActivity && stats.recentActivity.length > 0 
+    ? stats.recentActivity[0].questionsAnswered 
+    : 0;
+  const weeklyGoal = Math.max(10, Math.ceil(totalQuestionsAnswered / 4)); // Dynamic goal
+  const weeklyProgress = Math.min(totalQuestionsAnswered, weeklyGoal);
 
   return (
     <Box>

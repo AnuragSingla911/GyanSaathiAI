@@ -129,15 +129,15 @@ async function updateProgressSummary(userId, subject, topic, skill, stats) {
   await transaction(async (client) => {
     // Get or create progress entry
     const existingResult = await client.query(
-      'SELECT * FROM progress_summary WHERE user_id = $1 AND subject = $2 AND topic = $3 AND skill = $4',
+      'SELECT * FROM user_progress WHERE user_id = $1 AND subject = $2 AND topic = $3 AND skill = $4',
       [userId, subject, topic, skill]
     );
     
     if (existingResult.rows.length === 0) {
       // Create new progress entry
       await client.query(
-        `INSERT INTO progress_summary 
-         (user_id, subject, topic, skill, total_questions_answered, correct_answers, mastery_level, last_updated_at)
+        `INSERT INTO user_progress 
+         (user_id, subject, topic, skill, total_questions_answered, correct_answers, mastery_level, last_practiced)
          VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
         [userId, subject, topic, skill, stats.totalQuestions, stats.correctAnswers, 
          calculateMasteryLevel(stats.correctAnswers, stats.totalQuestions)]
@@ -155,9 +155,9 @@ async function updateProgressSummary(userId, subject, topic, skill, stats) {
       const newBestStreak = Math.max(existing.best_streak, newCurrentStreak);
       
       await client.query(
-        `UPDATE progress_summary 
+        `UPDATE user_progress 
          SET total_questions_answered = $1, correct_answers = $2, mastery_level = $3,
-             current_streak = $4, best_streak = $5, last_updated_at = CURRENT_TIMESTAMP
+             current_streak = $4, best_streak = $5, last_practiced = CURRENT_TIMESTAMP
          WHERE user_id = $6 AND subject = $7 AND topic = $8 AND skill = $9`,
         [newTotal, newCorrect, newMastery, newCurrentStreak, newBestStreak,
          userId, subject, topic, skill]
