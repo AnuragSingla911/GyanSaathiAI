@@ -1,10 +1,10 @@
-# AI Tutor App - Development Makefile
+# GyanSaathiAI App - Development Makefile
 
 .PHONY: help install dev build test clean docker-build docker-up docker-down logs
 
 # Default target
 help:
-	@echo "AI Tutor App - Available commands:"
+	@echo "GyanSaathiAI App - Available commands:"
 	@echo ""
 	@echo "Development:"
 	@echo "  install     - Install all dependencies"
@@ -97,7 +97,7 @@ db-reset:
 # Quick start command
 start: docker-up
 	@echo ""
-	@echo "🚀 AI Tutor App is running!"
+	@echo "🚀 GyanSaathiAI App is running!"
 	@echo "📱 Frontend: http://localhost:3000"
 	@echo "🔧 Backend API: http://localhost:5000"
 	@echo "🤖 ML Service: http://localhost:8001"

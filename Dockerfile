@@ -1,4 +1,4 @@
-# Single container AI Tutor with all services
+# Single container GyanSaathiAI with all services
 FROM ubuntu:22.04
 
 # Prevent interactive prompts during package installation

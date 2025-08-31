@@ -1,6 +1,6 @@
-# AI Tutor Prompts
+# GyanSaathiAI Prompts
 
-This directory contains all prompt templates used by the AI Tutor system.
+This directory contains all prompt templates used by the GyanSaathiAI system.
 
 ## File Naming Convention
 

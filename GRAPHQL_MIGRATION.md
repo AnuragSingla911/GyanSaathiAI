@@ -1,6 +1,6 @@
 # GraphQL Migration Guide
 
-This document outlines the migration from REST API to GraphQL for the AI Tutor application.
+This document outlines the migration from REST API to GraphQL for the GyanSaathiAI application.
 
 ## Overview
 

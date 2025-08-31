@@ -92,7 +92,7 @@ const Layout: React.FC = () => {
         <Box display="flex" alignItems="center" gap={1}>
           <School color="primary" />
           <Typography variant="h6" noWrap component="div" color="primary">
-            AI Tutor
+            GyanSaathiAI
           </Typography>
         </Box>
       </Toolbar>
@@ -146,7 +146,7 @@ const Layout: React.FC = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {navigationItems.find(item => item.path === location.pathname)?.text || 'AI Tutor'}
+            {navigationItems.find(item => item.path === location.pathname)?.text || 'GyanSaathiAI'}
           </Typography>
           <Box display="flex" alignItems="center" gap={1}>
             <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }}>

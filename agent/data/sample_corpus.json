@@ -58,7 +58,7 @@
   ],
   "metadata": {
     "version": "1.0",
-    "description": "Sample educational corpus for AI Tutor testing",
+    "description": "Sample educational corpus for GyanSaathiAI testing",
     "total_documents": 5,
     "subjects": ["math", "science", "history", "english"],
     "class_levels": [7, 8, 9],

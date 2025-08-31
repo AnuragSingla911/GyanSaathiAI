@@ -1,7 +1,7 @@
 {
   "name": "ai-tutor-backend",
   "version": "1.0.0",
-  "description": "AI Tutor Backend API",
+  "description": "GyanSaathiAI Backend API",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

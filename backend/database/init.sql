@@ -1,4 +1,4 @@
--- AI Tutor App Database Schema
+-- GyanSaathiAI App Database Schema
 -- PostgreSQL initialization script
 
 -- Enable required extensions

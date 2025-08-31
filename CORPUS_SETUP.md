@@ -1,6 +1,6 @@
-# AI Tutor Corpus Setup with Embeddings
+# GyanSaathiAI Corpus Setup with Embeddings
 
-This guide explains how to set up the AI Tutor corpus with OpenAI embeddings using LangChain's pgvector integration.
+This guide explains how to set up the GyanSaathiAI corpus with OpenAI embeddings using LangChain's pgvector integration.
 
 ## Overview
 

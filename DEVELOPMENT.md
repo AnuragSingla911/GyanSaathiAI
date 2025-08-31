@@ -1,4 +1,4 @@
-# AI Tutor App - Development Guide
+# GyanSaathiAI App - Development Guide
 
 ## 🚀 Quick Start
 

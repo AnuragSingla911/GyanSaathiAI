@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: AI Tutor API
+  title: GyanSaathiAI API
   version: 1.0.0
 servers:
   - url: /api/v1

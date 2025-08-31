@@ -2,7 +2,7 @@
 
 set -e
 
-echo "🐳 Testing AI Tutor Docker Setup with GraphQL Migration"
+echo "🐳 Testing GyanSaathiAI Docker Setup with GraphQL Migration"
 echo "========================================================"
 
 # Colors for output
@@ -51,7 +51,7 @@ if [ ! -f .env ]; then
     else
         print_status "warning" "No env.example found, creating basic .env"
         cat > .env << EOF
-# AI Tutor Environment Variables
+# GyanSaathiAI Environment Variables
 NODE_ENV=development
 OPENAI_API_KEY=your-openai-api-key-here
 EOF

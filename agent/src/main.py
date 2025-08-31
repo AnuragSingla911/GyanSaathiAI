@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     
     # Initialize services
-    logger.info("Initializing AI Tutor Agent services...")
+    logger.info("Initializing GyanSaathiAI Agent services...")
     
     rag_retriever = RAGRetriever(
         postgres_url=settings.postgres_url,
@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
         await rag_retriever.close()
 
 app = FastAPI(
-    title="AI Tutor Agent",
+    title="GyanSaathiAI Agent",
     description="LangChain/LangGraph agent for question generation and content processing",
     version="1.0.0",
     lifespan=lifespan

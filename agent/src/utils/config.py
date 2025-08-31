@@ -1,5 +1,5 @@
 """
-Configuration management for AI Tutor Agent
+Configuration management for GyanSaathiAI Agent
 """
 
 import os

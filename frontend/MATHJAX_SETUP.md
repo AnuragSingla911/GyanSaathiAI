@@ -1,6 +1,6 @@
 # MathJax Integration Guide
 
-This document explains how MathJax is integrated into the AI Tutor frontend to render mathematical content.
+This document explains how MathJax is integrated into the GyanSaathiAI frontend to render mathematical content.
 
 ## Overview
 

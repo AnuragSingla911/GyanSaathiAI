@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting AI Tutor container..."
+echo "🚀 Starting GyanSaathiAI container..."
 
 # Create data directories if they don't exist
 mkdir -p /var/lib/postgresql/data /var/lib/mongodb /var/log/supervisor

@@ -1,4 +1,4 @@
-# AI Tutor - Simple Setup Guide
+# GyanSaathiAI - Simple Setup Guide
 
 ## 🚀 Quick Start
 

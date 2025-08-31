@@ -1,4 +1,4 @@
-# AI Tutor - Interview-Ready Demo
+# GyanSaathiAI - Interview-Ready Demo
 
 A complete AI-powered tutoring platform built with React, Node.js, Python LangChain/LangGraph, PostgreSQL, MongoDB, and Redis - all packaged in Docker containers for easy deployment.
 
