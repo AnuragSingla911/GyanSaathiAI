@@ -26,7 +26,7 @@ import {
   Check,
   Timer,
 } from '@mui/icons-material';
-import { TextField } from '@mui/material';
+import { TextField, MenuItem } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 import { useQuizAPI } from '../services/graphqlApi';
 import { GET_QUIZ_ATTEMPT } from '../graphql/operations';
@@ -68,6 +68,34 @@ const QuizPage: React.FC = () => {
   const [subject, setSubject] = useState<string>('Mathematics');
   const [topic, setTopic] = useState<string>('');
   const [questionCount, setQuestionCount] = useState<number>(5);
+
+  // Subject → Topics map (can be moved to config or fetched later)
+  const SUBJECT_TOPICS: Record<string, string[]> = {
+    Mathematics: [
+      'Algebra',
+      'Linear Equations',
+      'Quadratic Equations',
+      'Geometry',
+      'Trigonometry',
+      'Calculus',
+      'Probability',
+      'Statistics'
+    ],
+    Physics: [
+      'Kinematics',
+      'Dynamics',
+      'Work and Energy',
+      'Electricity',
+      'Magnetism',
+      'Optics'
+    ],
+    Chemistry: [
+      'Atomic Structure',
+      'Chemical Reactions',
+      'Thermodynamics',
+      'Organic Chemistry'
+    ]
+  };
   
   // GraphQL query for quiz attempt details
   const { data: attemptDetails, error: attemptError } = useQuery(GET_QUIZ_ATTEMPT, {
@@ -171,6 +199,19 @@ const QuizPage: React.FC = () => {
       if (!Number.isNaN(parsed) && parsed > 0 && parsed <= 50) setQuestionCount(parsed);
     }
   }, [location.search]);
+
+  // When subject changes, ensure topic is a valid option for that subject
+  useEffect(() => {
+    const options = SUBJECT_TOPICS[subject] || [];
+    if (options.length > 0) {
+      if (!options.includes(topic)) {
+        setTopic(options[0]);
+      }
+    } else {
+      setTopic('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject]);
 
   // Debug effect for current question changes
   useEffect(() => {
@@ -381,16 +422,26 @@ const QuizPage: React.FC = () => {
                 label="Subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="e.g., Mathematics"
+                select
                 fullWidth
-              />
+              >
+                {Object.keys(SUBJECT_TOPICS).map((subj) => (
+                  <MenuItem key={subj} value={subj}>{subj}</MenuItem>
+                ))}
+              </TextField>
               <TextField
                 label="Topic"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                placeholder="e.g., Linear Equations"
+                select
                 fullWidth
-              />
+                disabled={(SUBJECT_TOPICS[subject] || []).length === 0}
+                helperText={(SUBJECT_TOPICS[subject] || []).length === 0 ? 'No topics available for this subject' : ''}
+              >
+                {(SUBJECT_TOPICS[subject] || []).map((t) => (
+                  <MenuItem key={t} value={t}>{t}</MenuItem>
+                ))}
+              </TextField>
               <TextField
                 label="# Questions"
                 type="number"

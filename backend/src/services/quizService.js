@@ -26,35 +26,74 @@ class QuizService {
       console.log('QuizService: Input params:', { subject, topic, totalQuestions, skillFilters });
       
       // Build question filter - try to match your actual MongoDB data
-      const questionFilter = {
-        status: 'active'
-      };
-      
-      // Only add subject filter if it's not empty - convert to lowercase to match your data
+      const questionFilter = { status: 'active' };
+
+      // Subject filter (case-insensitive) with simple synonym/alias handling
       if (subject && subject.trim()) {
-        const subjectLower = subject.toLowerCase();
-        questionFilter.subject = { $regex: new RegExp(subjectLower, 'i') }; // Case-insensitive partial match
+        const s = subject.trim().toLowerCase();
+        let pattern = subject.trim();
+        if (s.includes('math')) {
+          pattern = '(math|mathematics|maths)';
+        } else if (s.includes('phys')) {
+          pattern = '(phys|physics)';
+        } else if (s.includes('chem')) {
+          pattern = '(chem|chemistry)';
+        } else if (s.includes('bio')) {
+          pattern = '(bio|biology|life sciences)';
+        } else if (s.includes('sci')) {
+          pattern = '(sci|science)';
+        }
+        questionFilter.subject = { $regex: new RegExp(pattern, 'i') };
+      }
+
+      // Topic filter (case-insensitive)
+      if (topic && topic.trim()) {
+        questionFilter.topic = { $regex: new RegExp(topic.trim(), 'i') };
       }
       
       
-      console.log('QuizService: Question filter:', questionFilter);
+      console.log('QuizService: Base question filter (subject/topic):', questionFilter);
       
-      // Get available questions from MongoDB using Mongoose model instead of native driver
-      console.log('QuizService: Querying MongoDB for questions...');
-      const availableQuestions = await VersionedQuestion.find(questionFilter).lean();
-      console.log('QuizService: Found questions with filter:', availableQuestions.length);
+      // Prefer ACTIVE first, then fill with DRAFT if needed (to support freshly generated items)
+      console.log('QuizService: Querying MongoDB for ACTIVE questions...');
+      const activeQuestions = await VersionedQuestion.find({ ...questionFilter, status: 'active' }).lean();
+      let availableQuestions = [...activeQuestions];
       
-      // If no questions found, try broader search without topic
-      if (availableQuestions.length === 0 && topic) {
-        console.log('QuizService: No questions found with topic filter, trying subject-only search...');
-        const broaderQuestions = await VersionedQuestion.find({ 
-          status: 'active',
-          subject: { $regex: new RegExp(subject || 'Mathematics', 'i') }
-        }).limit(10).lean();
-        console.log('QuizService: Found broader questions (subject only):', broaderQuestions.length);
-        if (broaderQuestions.length > 0) {
-          availableQuestions.push(...broaderQuestions);
+      if (availableQuestions.length < (totalQuestions || 0)) {
+        console.log('QuizService: Not enough ACTIVE questions, querying DRAFT to top-up...');
+        const draftQuestions = await VersionedQuestion.find({ ...questionFilter, status: 'draft' }).lean();
+        // Deduplicate by _id
+        const existingIds = new Set(availableQuestions.map(q => String(q._id)));
+        for (const q of draftQuestions) {
+          if (!existingIds.has(String(q._id))) availableQuestions.push(q);
         }
+      }
+      console.log('QuizService: Total available (active+draft) with filters:', availableQuestions.length);
+      
+      // If none found and a topic was requested, do NOT fallback to other topics
+      if (availableQuestions.length === 0 && topic && topic.trim()) {
+        console.log('QuizService: No questions found for exact subject+topic. Aborting without unrelated fallback.');
+        throw new Error('No questions available for the specified subject and topic');
+      }
+
+      // If none with both filters, relax to subject-only (only when topic not specified)
+      if (availableQuestions.length === 0 && subject && (!topic || !topic.trim())) {
+        console.log('QuizService: No questions found with subject+topic, trying subject-only...');
+        const s = subject.trim().toLowerCase();
+        let pattern = subject.trim();
+        if (s.includes('math')) {
+          pattern = '(math|mathematics|maths)';
+        } else if (s.includes('phys')) {
+          pattern = '(phys|physics)';
+        } else if (s.includes('chem')) {
+          pattern = '(chem|chemistry)';
+        } else if (s.includes('bio')) {
+          pattern = '(bio|biology|life sciences)';
+        } else if (s.includes('sci')) {
+          pattern = '(sci|science)';
+        }
+        const subjectOnly = await VersionedQuestion.find({ status: 'active', subject: { $regex: new RegExp(pattern, 'i') } }).limit(totalQuestions * 2).lean();
+        if (subjectOnly.length > 0) availableQuestions.push(...subjectOnly);
       }
       
       // If still no questions, try to find ANY active questions
