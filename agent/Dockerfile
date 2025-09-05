@@ -17,10 +17,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY . .
 
-# Create non-root user
+# Create non-root user and set up cache directories
 RUN groupadd -r agent && useradd -r -g agent agent
-RUN chown -R agent:agent /app
+RUN mkdir -p /app/cache /app/models /home/agent/.cache/huggingface
+RUN chown -R agent:agent /app /home/agent
 USER agent
+
+# Set Hugging Face cache directory
+ENV HF_HOME=/app/cache/huggingface
+ENV TRANSFORMERS_CACHE=/app/cache/huggingface
+ENV HF_DATASETS_CACHE=/app/cache/huggingface/datasets
 
 EXPOSE 8000
 

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     
     # OpenAI Configuration
     openai_api_key: Optional[str] = None  # Will be loaded from environment variable
-    openai_model: str = "gpt-5-nano"
+    openai_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     
     # Agent Configuration
@@ -29,6 +29,32 @@ class Settings(BaseSettings):
     chunk_overlap: int = 200
     max_context_length: int = 4000
     similarity_threshold: float = 0.7
+    
+    # Enhanced Question Generation Config (v2)
+    exemplar_k: int = 3
+    retrieval_tau: float = 0.62
+    novelty_max_overlap: float = 0.80
+    dedup_cosine_threshold: float = 0.92
+    
+    # Template Inducer Config
+    template_confidence_threshold: float = 0.75
+    sympy_timeout_seconds: int = 30
+    distractor_count: int = 3
+    
+    # Validator Config
+    latex_render_timeout: int = 10
+    difficulty_classifier_threshold: float = 0.7
+    grounding_min_score: float = 0.6
+    
+    # Vector Search Config
+    rerank_top_k: int = 10
+    math_embedding_weight: float = 0.6
+    text_embedding_weight: float = 0.4
+    
+    # LLM Generation Config  
+    generation_temperature: float = 0.7
+    # Cap to avoid length-limit errors and ensure JSON completes
+    max_tokens: int = 700
     
     # Logging
     log_level: str = "INFO"

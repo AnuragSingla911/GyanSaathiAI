@@ -28,3 +28,19 @@ openai
 # Basic utilities
 numpy
 sympy
+
+# Hugging Face datasets for Hendrycks MATH
+datasets
+transformers
+
+# Enhanced math and template processing
+latex2mathml
+antlr4-python3-runtime
+
+# Image processing for LaTeX rendering
+Pillow
+matplotlib
+
+# Advanced text processing
+scikit-learn
+sentence-transformers
