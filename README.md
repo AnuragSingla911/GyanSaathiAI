@@ -10,12 +10,53 @@ An AI-powered tutoring platform with subject/topic-specific quizzes, LLM-driven 
 - Docker-first local setup; Airflow for scalable batch jobs
 
 ## Architecture
-```
-Frontend (React)  ⇄  Backend (Node/GraphQL)  ⇄  Postgres (quizzes/progress)
-         │                    │
-         ▼                    └── MongoDB (questions)
-Nginx (80)
-Agent (FastAPI/LangChain) ⇄ pgvector (embeddings) ⇄ Airflow (batch)
+
+```mermaid
+flowchart LR
+  %% Groups
+  subgraph Client[Client]
+    User((Student/Admin))
+  end
+
+  subgraph Edge[Nginx :80]
+    Nginx
+  end
+
+  subgraph App[Application Services]
+    Frontend[React Frontend]
+    Backend[Node.js + GraphQL :5000]
+    Agent[FastAPI (LangChain/LangGraph) :8000]
+  end
+
+  subgraph Data[Data Stores]
+    Postgres[(PostgreSQL + pgvector)]
+    Mongo[(MongoDB: questions)]
+    Redis[(Redis: cache/sessions)]
+  end
+
+  subgraph Batch[Batch Orchestration]
+    Airflow[Airflow Webserver/Scheduler :8080]
+  end
+
+  %% Client and Edge
+  User --> Nginx
+  Nginx --> Frontend
+  Nginx -. proxy .- Backend
+
+  %% App ↔ Data
+  Frontend <-- GraphQL/REST --> Backend
+  Backend <--> Postgres
+  Backend <--> Mongo
+  Backend <--> Redis
+
+  %% Agent + RAG
+  Agent <--> Postgres
+  Agent <--> Mongo
+
+  %% Batch
+  User -. submit batch .-> Agent
+  Agent -->|trigger DAG| Airflow
+  Airflow -. calls batch API .-> Agent
 ```
 
 ## Screenshots
