@@ -15,7 +15,7 @@ An AI-powered tutoring platform with subject/topic-specific quizzes, LLM-driven 
 flowchart LR
   %% Groups
   subgraph Client[Client]
-    User((Student/Admin))
+    User[Student / Admin]
   end
 
   subgraph Edge[Nginx :80]
@@ -25,26 +25,26 @@ flowchart LR
   subgraph App[Application Services]
     Frontend[React Frontend]
     Backend[Node.js + GraphQL :5000]
-    Agent[FastAPI (LangChain/LangGraph) :8000]
+    Agent[FastAPI + LangChain :8000]
   end
 
   subgraph Data[Data Stores]
-    Postgres[(PostgreSQL + pgvector)]
-    Mongo[(MongoDB: questions)]
-    Redis[(Redis: cache/sessions)]
+    Postgres[PostgreSQL + pgvector]
+    Mongo[MongoDB: questions]
+    Redis[Redis: cache/sessions]
   end
 
   subgraph Batch[Batch Orchestration]
-    Airflow[Airflow Webserver/Scheduler :8080]
+    Airflow[Airflow :8080]
   end
 
   %% Client and Edge
   User --> Nginx
   Nginx --> Frontend
-  Nginx -. proxy .- Backend
+  Nginx -. proxy .-> Backend
 
   %% App ↔ Data
-  Frontend <-- GraphQL/REST --> Backend
+  Frontend <-->|GraphQL/REST| Backend
   Backend <--> Postgres
   Backend <--> Mongo
   Backend <--> Redis
