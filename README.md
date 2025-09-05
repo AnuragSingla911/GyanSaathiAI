@@ -1,10 +1,10 @@
 # GyanSaathiAI
 
-A complete AI-powered tutoring platform built with React, Node.js, Python LangChain/LangGraph, PostgreSQL, MongoDB, and Redis - all packaged in Docker containers for easy deployment.
+AI-powered tutoring platform with subject/topic-specific quizzes, agent-driven question generation, and an Airflow pipeline for batch generation. Services: React (Frontend), Node.js + GraphQL (Backend), Python LangChain/LangGraph (Agent), PostgreSQL, MongoDB, Redis, Airflow. All containerized via Docker Compose.
 
 ## 🏗️ System Architecture
 
-### **High-Level Architecture**
+### High-Level Architecture
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Frontend      │    │    Backend      │    │   Agent         │
@@ -21,7 +21,7 @@ A complete AI-powered tutoring platform built with React, Node.js, Python LangCh
 ```
 
 
-### **Data Flow Architecture**
+### Data Flow Architecture
 
 #### **1. Content Ingestion Flow (Admin)**
 ```
@@ -107,7 +107,7 @@ curl http://localhost:8000/health                  # Agent health
 curl http://localhost                             # Frontend (via nginx)
 ```
 
-**📖 For detailed setup instructions, see [SETUP.md](SETUP.md)**
+Airflow UI: http://localhost:8080 (airflow/airflow)
 
 ### Access Points
 - **Frontend**: http://localhost (via nginx)
@@ -130,7 +130,7 @@ curl http://localhost                             # Frontend (via nginx)
 
 ## 🎯 API Documentation
 
-### **Agent Service (Question Generation)**
+### Agent Service (Question Generation)
 ```bash
 # Ingest sample corpus
 curl -X POST "http://localhost:8000/ingestSampleCorpus"
@@ -159,7 +159,7 @@ curl -X POST "http://localhost:8000/ingestEmbedding" \
   }'
 ```
 
-### **Backend Service (Student Management)**
+### Backend Service (Student Management)
 ```bash
 # Student Registration
 curl -X POST "http://localhost:5000/api/auth/register" \
@@ -189,7 +189,7 @@ curl -X GET "http://localhost:5000/api/v1/questions/generate?subject=math&topic=
 
 ## 🗄️ Database Schema
 
-### **PostgreSQL (Main Database)**
+### PostgreSQL (Main Database)
 - **users**: User accounts, profiles, and authentication
 - **user_preferences**: Student subject preferences and settings
 - **quiz_attempts**: Quiz session metadata and progress
@@ -198,18 +198,18 @@ curl -X GET "http://localhost:5000/api/v1/questions/generate?subject=math&topic=
 - **langchain_pg_collection**: RAG collection metadata
 - **langchain_pg_embedding**: Document embeddings for vector search
 
-### **MongoDB (Question Storage)**
+### MongoDB (Question Storage)
 - **questions**: Versioned question content (immutable once active)
 - **Structure**: questionText, options, correctAnswer, explanation, metadata
 
-### **Redis (Caching & Sessions)**
+### Redis (Caching & Sessions)
 - **user sessions**: Authentication tokens and user data
 - **progress cache**: Fast access to user progress
 - **rate limiting**: API request throttling
 
 ## 🔬 Testing the System
 
-### **1. Setup Corpus and Generate Questions**
+### 1. Setup Corpus and Generate Questions
 ```bash
 # 1. Ingest sample corpus
 curl -X POST "http://localhost:8000/ingestSampleCorpus"
@@ -220,7 +220,7 @@ curl -X POST "http://localhost:8000/admin/generate/question" \
   -d '{"subject": "math", "topic": "linear equations", "class_level": "8"}'
 ```
 
-### **2. Create Student Account**
+### 2. Create Student Account
 ```bash
 # Register student
 curl -X POST "http://localhost:5000/api/auth/register" \
@@ -228,7 +228,7 @@ curl -X POST "http://localhost:5000/api/auth/register" \
   -d '{"username": "test_student", "email": "test@example.com", "password": "password123", "firstName": "Test", "lastName": "Student", "gradeLevel": 8, "preferredSubjects": ["math"]}'
 ```
 
-### **3. Test Student Login and Question Access**
+### 3. Test Student Login and Question Access
 ```bash
 # Login and get token
 TOKEN=$(curl -s -X POST "http://localhost:5000/api/v1/auth/login" \
@@ -242,7 +242,7 @@ curl -X GET "http://localhost:5000/api/v1/questions/generate?subject=math&topic=
 
 ## 🛠️ Development
 
-### **Project Structure**
+### Project Structure
 ```
 Ai-Tutor/
 ├── backend/           # Node.js API server (Student management)
@@ -264,7 +264,17 @@ Ai-Tutor/
 └── docker-compose.yml # Service orchestration
 ```
 
-### **Key Data Flows Implemented**
+## 🖼️ Screenshots
+
+Place screenshots under `docs/screenshots/` and they will render below. Suggested filenames are already referenced; just add the PNGs.
+
+### Take a Quiz
+![Take a Quiz](docs/screenshots/take-quiz.png)
+
+### Dashboard
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Key Data Flows Implemented
 
 ✅ **Content Ingestion**: Agent → RAG Vector Database (PostgreSQL + pgvector)  
 ✅ **Question Generation**: Agent → RAG Retrieval → LLM → MongoDB  
