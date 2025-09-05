@@ -20,10 +20,15 @@ Agent (FastAPI/LangChain) ⇄ pgvector (embeddings) ⇄ Airflow (batch)
 
 ## Screenshots
 
-![Take a Quiz](docs/screenshots/take-quiz.png)
-![Dashboard](docs/screenshots/dashboard.png)
+### Take a Quiz
+<p>
+  <img src="docs/screenshots/take-quiz.png" alt="Take a Quiz" width="720" />
+</p>
 
-Add images at `docs/screenshots/take-quiz.png` and `docs/screenshots/dashboard.png`.
+### Dashboard
+<p>
+  <img src="docs/screenshots/dashboard.png" alt="Dashboard" width="720" />
+</p>
 
 ## Quick Start
 1) Prerequisites: Docker Desktop, ports 80/5000/8000/8080 free
