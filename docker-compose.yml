@@ -103,6 +103,11 @@ services:
       MAX_QUESTIONS_PER_BATCH: 10
       QUESTION_GENERATION_TIMEOUT: 30
       MAX_RETRIES: 3
+      # Airflow integration for batch generation
+      AIRFLOW_BASE_URL: http://airflow-webserver:8080
+      AIRFLOW_USERNAME: ${AIRFLOW_USERNAME:-airflow}
+      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD:-airflow}
+      AIRFLOW_DAG_ID: generate_questions_batch
     ports:
       - "8000:8000"
     depends_on:
@@ -157,12 +162,90 @@ services:
     networks:
       - tutor_network
 
+  # Airflow metadata database (separate from app DB)
+  airflow-postgres:
+    image: postgres:15
+    container_name: tutor_airflow_postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    networks:
+      - tutor_network
+
+  # Airflow initialization (database and admin user)
+  airflow-init:
+    image: apache/airflow:2.9.2
+    container_name: tutor_airflow_init
+    user: "0:0"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: supersecret
+    volumes:
+      - ./ops/airflow/dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - airflow_plugins:/opt/airflow/plugins
+    entrypoint: /bin/bash
+    command: -c "airflow db migrate && airflow users create --username ${AIRFLOW_USERNAME:-airflow} --password ${AIRFLOW_PASSWORD:-airflow} --firstname Admin --lastname User --role Admin --email admin@example.com || true; chown -R 50000:0 /opt/airflow/logs; chmod -R 775 /opt/airflow/logs"
+    depends_on:
+      - airflow-postgres
+    networks:
+      - tutor_network
+
+  # Airflow webserver
+  airflow-webserver:
+    image: apache/airflow:2.9.2
+    container_name: tutor_airflow_webserver
+    restart: always
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./ops/airflow/dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - airflow_plugins:/opt/airflow/plugins
+    depends_on:
+      - airflow-init
+    command: webserver
+    networks:
+      - tutor_network
+
+  # Airflow scheduler
+  airflow-scheduler:
+    image: apache/airflow:2.9.2
+    container_name: tutor_airflow_scheduler
+    restart: always
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    volumes:
+      - ./ops/airflow/dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - airflow_plugins:/opt/airflow/plugins
+    depends_on:
+      - airflow-init
+    command: scheduler
+    networks:
+      - tutor_network
+
 volumes:
   postgres_data:
   mongodb_data:
   redis_data:
   ml_models: # For ML models/embeddings
   ml_cache: # For HuggingFace/LangChain caches
+  airflow_postgres_data:
+  airflow_logs:
+  airflow_plugins:
 
 networks:
   tutor_network:

@@ -26,6 +26,8 @@ import {
   Check,
   Timer,
 } from '@mui/icons-material';
+import { TextField } from '@mui/material';
+import { useLocation } from 'react-router-dom';
 import { useQuizAPI } from '../services/graphqlApi';
 import { GET_QUIZ_ATTEMPT } from '../graphql/operations';
 
@@ -62,6 +64,10 @@ const QuizPage: React.FC = () => {
   const [results, setResults] = useState<any[]>([]);
   const [timeSpent, setTimeSpent] = useState<{ [key: string]: number }>({});
   const [startTime, setStartTime] = useState<Date | null>(null);
+  const location = useLocation();
+  const [subject, setSubject] = useState<string>('Mathematics');
+  const [topic, setTopic] = useState<string>('');
+  const [questionCount, setQuestionCount] = useState<number>(5);
   
   // GraphQL query for quiz attempt details
   const { data: attemptDetails, error: attemptError } = useQuery(GET_QUIZ_ATTEMPT, {
@@ -152,6 +158,20 @@ const QuizPage: React.FC = () => {
     }
   }, [attemptDetails]);
 
+  // Initialize subject/topic from URL params
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const s = params.get('subject');
+    const t = params.get('topic');
+    const n = params.get('n');
+    if (s) setSubject(s);
+    if (t) setTopic(t);
+    if (n) {
+      const parsed = parseInt(n, 10);
+      if (!Number.isNaN(parsed) && parsed > 0 && parsed <= 50) setQuestionCount(parsed);
+    }
+  }, [location.search]);
+
   // Debug effect for current question changes
   useEffect(() => {
     if (currentQuestion) {
@@ -196,9 +216,9 @@ const QuizPage: React.FC = () => {
       // Start a new quiz attempt
       console.log('QuizPage: Calling startQuizAttempt...');
       const attempt = await startQuizAttempt({
-        subject: 'Mathematics', // Match the MongoDB question subject
-        topic: 'linear equations', // Match the MongoDB question topic
-        totalQuestions: 5
+        subject: subject,
+        topic: topic || undefined,
+        totalQuestions: questionCount
       });
       console.log('QuizPage: Quiz attempt created:', attempt);
 
@@ -356,6 +376,33 @@ const QuizPage: React.FC = () => {
               <Chip label="Progress Tracking" color="secondary" variant="outlined" />
               <Chip label="Instant Feedback" color="success" variant="outlined" />
             </Stack>
+            <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr 1fr' }} gap={2} mb={3} textAlign="left">
+              <TextField
+                label="Subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="e.g., Mathematics"
+                fullWidth
+              />
+              <TextField
+                label="Topic"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="e.g., Linear Equations"
+                fullWidth
+              />
+              <TextField
+                label="# Questions"
+                type="number"
+                value={questionCount}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!Number.isNaN(v)) setQuestionCount(Math.max(1, Math.min(50, v)));
+                }}
+                inputProps={{ min: 1, max: 50 }}
+                fullWidth
+              />
+            </Box>
             <Button
               variant="contained"
               startIcon={<PlayArrow />}

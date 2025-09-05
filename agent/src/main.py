@@ -19,11 +19,13 @@ from .models.schemas import (
     QuestionGenerationRequest,
     QuestionCandidate,
     GenerationResult,
-    HealthResponse
+    HealthResponse,
+    BatchGenerationRequest
 )
 from .utils.config import get_settings
 from .utils.tracing import setup_tracing
 from langchain_community.vectorstores.pgvector import PGVector
+import httpx
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -430,6 +432,53 @@ async def generate_batch_questions_v2(requests: List[QuestionGenerationRequest])
     except Exception as e:
         logger.error(f"Error in v2 batch generation: {str(e)}")
         raise HTTPException(status_code=500, detail=f"v2 batch generation failed: {str(e)}")
+
+@app.post("/admin/airflow/submit-batch")
+async def submit_airflow_batch(request: BatchGenerationRequest):
+    """ADMIN: Submit a batch generation job to Airflow DAG queue.
+    This triggers DAG run with conf carrying the generation parameters.
+    """
+    settings = get_settings()
+    dag_id = settings.airflow_dag_id
+    base_url = settings.airflow_base_url.rstrip("/")
+    trigger_url = f"{base_url}/api/v1/dags/{dag_id}/dagRuns"
+
+    dag_conf = {
+        "subject": request.subject,
+        "topic": request.topic,
+        "total_questions": request.total_questions,
+        "difficulty": request.difficulty,
+        "class_level": request.class_level,
+        "skills": request.skills,
+        "question_type": request.question_type,
+        "concurrency": request.concurrency,
+        "notes": request.notes,
+    }
+
+    payload = {
+        "conf": dag_conf
+    }
+
+    auth = None
+    headers = {"Content-Type": "application/json"}
+    if settings.airflow_username and settings.airflow_password:
+        auth = (settings.airflow_username, settings.airflow_password)
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            resp = await client.post(trigger_url, json=payload, auth=auth, headers=headers)
+            if resp.status_code >= 300:
+                raise HTTPException(status_code=resp.status_code, detail=f"Airflow error: {resp.text}")
+            data = resp.json()
+            return {
+                "success": True,
+                "message": "DAG run submitted",
+                "dag_id": dag_id,
+                "dag_run_id": data.get("dag_run_id"),
+                "conf": dag_conf
+            }
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"Failed to contact Airflow: {str(e)}")
 
 @app.get("/admin/config")
 async def get_agent_config():

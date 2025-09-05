@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = "INFO"
+
+    # Airflow integration
+    airflow_base_url: str = "http://airflow-webserver:8080"
+    airflow_username: Optional[str] = None
+    airflow_password: Optional[str] = None
+    airflow_dag_id: str = "generate_questions_batch"
     
     class Config:
         env_file = ".env"
