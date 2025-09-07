@@ -10,6 +10,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from ..models.schemas import QuestionCandidate, ValidationResult
+from sympy.parsing.sympy_parser import (
+    parse_expr,
+    standard_transformations,
+    implicit_multiplication_application
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,10 +97,12 @@ class EnhancedQuestionValidator:
     async def validate_all(self, question: QuestionCandidate, spec: Dict[str, Any]) -> Dict[str, ValidationResult]:
         """Run all validators on a question"""
         results = {}
-        
         for validator_name, validator_func in self.validators.items():
             try:
+                print(f"Validating {validator_name} validator")
+                print(f"Validator function: {validator_func}")
                 result = await validator_func(question, spec)
+                print(f"Result: {result}")
                 results[validator_name] = result
             except Exception as e:
                 logger.error(f"Error in {validator_name} validator: {e}")
@@ -116,7 +123,7 @@ class EnhancedQuestionValidator:
         if not question.stem or len(question.stem.strip()) < 10:
             issues.append("Question stem too short or missing")
             score -= 0.3
-        
+        print(f"Question: {question}")
         # Check options for multiple choice
         if spec.get("question_type") == "multiple_choice":
             if len(question.options) < 2:
@@ -133,6 +140,14 @@ class EnhancedQuestionValidator:
             if invalid_correct:
                 issues.append(f"Invalid correct option IDs: {invalid_correct}")
                 score -= 0.3
+
+            # Enforce exactly 4 options and exactly 1 correct answer for MCQ
+            if len(question.options) != 4:
+                issues.append("Multiple choice must have exactly 4 options")
+                score -= 0.2
+            if len(question.correct_option_ids) != 1:
+                issues.append("Multiple choice must have exactly one correct option")
+                score -= 0.4
         
         # Check for reasonable option lengths
         if question.options:
@@ -527,91 +542,245 @@ class EnhancedQuestionValidator:
         )
     
     async def _validate_math_correctness(self, question: QuestionCandidate, spec: Dict[str, Any]) -> ValidationResult:
-        """Enhanced mathematical correctness validation using SymPy"""
+        """Math validation (stem-only): extract equation from stem, solve, compare to options."""
         score = 1.0
-        issues = []
-        
+        issues: List[str] = []
+
+        # Only run for math MCQs with options
+        if spec.get("subject", "").lower() != "math" or not question.options or not question.correct_option_ids:
+            return ValidationResult(
+                validator_name="math",
+                passed=True,
+                score=1.0,
+                details={"issues": [], "mode": "skipped_non_math_or_no_options"}
+            )
+
         try:
-            # Extract and validate mathematical expressions
-            expressions = self._extract_math_expressions(question.stem)
-            solution_expressions = self._extract_math_expressions(question.canonical_solution or "")
-            
-            all_expressions = expressions + solution_expressions
-            
-            if all_expressions:
-                for i, expr in enumerate(all_expressions):
+            logger.info(f"[math] Attempting SymPy solve for stem: {question.stem}")
+            solved_values = self._solve_from_stem_by_subject_topic(
+                stem=question.stem,
+                subject=spec.get("subject"),
+                topic=spec.get("topic"),
+                variable="x"
+            )
+            if solved_values:
+                solved_val = solved_values[0]
+                logger.info(f"[math] Solved value from stem: {solved_val}")
+
+                # Compare against marked correct option
+                correct_option = next((opt for opt in question.options if opt.id in question.correct_option_ids), None)
+                if correct_option is not None:
+                    option_val = self._parse_text_to_sympy_value(correct_option.text)
+                    logger.info(f"[math] Parsed correct option '{correct_option.text}' -> {option_val}")
+                    if option_val is not None:
+                        try:
+                            equal_symbolic = sympy.simplify(solved_val - option_val) == 0
+                        except Exception:
+                            equal_symbolic = False
+                        if not equal_symbolic:
+                            try:
+                                equal_numeric = abs(float(solved_val) - float(option_val)) <= 1e-2
+                            except Exception:
+                                equal_numeric = False
+                        else:
+                            equal_numeric = True
+                        if not (equal_symbolic or equal_numeric):
+                            issues.append("Solved answer from stem does not match the marked correct option")
+                            score = min(score, self.settings.grounding_min_score - 0.01)
+                            logger.info("[math] Mismatch: solved value != marked correct option")
+                    else:
+                        issues.append("Could not parse numeric value from the marked correct option text")
+                        score -= 0.2
+                        logger.warning("[math] Could not parse numeric value from marked correct option")
+
+                # Ensure at least one option matches solved value
+                any_match = False
+                for opt in question.options:
+                    opt_val = self._parse_text_to_sympy_value(opt.text)
+                    if opt_val is None:
+                        continue
                     try:
-                        # Try to parse with SymPy
-                        cleaned_expr = self._clean_math_expression(expr)
-                        if cleaned_expr:
-                            sympy_expr = sympy.sympify(cleaned_expr)
-                            logger.debug(f"✅ Math expression {i+1} parsed successfully: {sympy_expr}")
-                    except Exception as e:
-                        issues.append(f"Invalid math expression {i+1}: {expr} ({str(e)})")
-                        score -= 0.3
-            
-            # Validate answer consistency for MCQ
-            if question.options and question.correct_option_ids:
-                try:
-                    # Extract numerical answers
-                    correct_answers = []
-                    for opt in question.options:
-                        if opt.id in question.correct_option_ids:
-                            numbers = re.findall(r'-?\d+\.?\d*', opt.text)
-                            if numbers:
-                                correct_answers.extend([float(n) for n in numbers])
-                    
-                    # Check if answers are reasonable
-                    if correct_answers:
-                        for ans in correct_answers:
-                            if abs(ans) > 1e10:
-                                issues.append("Answer magnitude extremely large")
-                                score -= 0.2
-                            elif ans != ans:  # NaN check
-                                issues.append("Answer is NaN")
-                                score -= 0.5
-                
-                except Exception as e:
-                    logger.warning(f"Answer validation error: {e}")
-            
-            # Cross-validate with canonical solution if available
-            if question.canonical_solution and question.correct_option_ids:
-                try:
-                    solution_numbers = re.findall(r'-?\d+\.?\d*', question.canonical_solution)
-                    if solution_numbers:
-                        solution_val = float(solution_numbers[0])
-                        
-                        # Check against correct options
-                        correct_opt_numbers = []
-                        for opt in question.options:
-                            if opt.id in question.correct_option_ids:
-                                opt_numbers = re.findall(r'-?\d+\.?\d*', opt.text)
-                                correct_opt_numbers.extend([float(n) for n in opt_numbers])
-                        
-                        if correct_opt_numbers:
-                            min_diff = min(abs(solution_val - opt_val) for opt_val in correct_opt_numbers)
-                            if min_diff > 0.01:  # Allow small numerical differences
-                                issues.append("Solution doesn't match correct option")
-                                score -= 0.4
-                
-                except Exception as e:
-                    logger.warning(f"Solution cross-validation error: {e}")
-        
+                        if sympy.simplify(solved_val - opt_val) == 0:
+                            any_match = True
+                            break
+                    except Exception:
+                        try:
+                            if abs(float(solved_val) - float(opt_val)) <= 1e-2:
+                                any_match = True
+                                break
+                        except Exception:
+                            continue
+                if not any_match:
+                    issues.append("Solved value from stem is not present in any option")
+                    score = min(score, self.settings.grounding_min_score - 0.01)
+                    logger.info("[math] Mismatch: solved value not present in any option")
+            else:
+                logger.info("[math] No solvable equation found in stem or extraction failed")
         except Exception as e:
-            issues.append(f"Math validation error: {str(e)}")
-            score -= 0.2
+            # Do not fail hard for parsing issues; record and apply small penalty
+            issues.append(f"Math validation error (stem-only): {str(e)}")
+            score -= 0.1
         
         passed = score >= self.settings.grounding_min_score
-        
         return ValidationResult(
             validator_name="math",
             passed=passed,
             score=max(0, score),
             details={
                 "issues": issues,
-                "expressions_found": len(all_expressions) if 'all_expressions' in locals() else 0
+                "mode": "stem_only"
             }
         )
+
+    def _solve_from_stem_by_subject_topic(self, stem: str, subject: Optional[str], topic: Optional[str], variable: str = "x") -> List[sympy.Expr]:
+        """Subject/topic aware dispatcher for attempting symbolic solving from the stem.
+        - math/algebra/linear equations: solve single-variable equations
+        - math/equations (general): attempt single-variable solve if an '=' is present
+        - other math topics (geometry/calculus/trigonometry): conservative; only try equation solve if clearly present
+        - non-math subjects: skip
+        Returns a list of SymPy expressions (solutions) or empty list if not applicable.
+        """
+        subject_l = (subject or "").lower()
+        topic_l = (topic or "").lower()
+        if subject_l != "math":
+            return []
+        # Algebraic equation families
+        algebra_topics = {"algebra", "linear equation", "linear equations", "equation", "equations", "quadratic equations"}
+        if topic_l in algebra_topics:
+            return self._solve_single_variable_equation_from_stem(stem, variable=variable)
+        # Geometry/trigonometry sometimes embed equations with '='; attempt cautiously
+        if topic_l in {"geometry", "trigonometry", "number theory"}:
+            if stem and "=" in stem:
+                return self._solve_single_variable_equation_from_stem(stem, variable=variable)
+            return []
+        # Calculus tasks (limits/derivatives/integrals) typically are not solved via Eq(lhs,rhs)
+        if topic_l in {"calculus", "differentiation", "integration", "limits"}:
+            return []
+        # Default fallback for math: if it looks like an equation, try
+        if stem and "=" in stem:
+            return self._solve_single_variable_equation_from_stem(stem, variable=variable)
+        return []
+
+    def _solve_single_variable_equation_from_stem(self, stem: str, variable: str = "x") -> List[sympy.Expr]:
+        """Extract a simple equation from the stem and solve for the given variable.
+        Supports implicit multiplication (e.g., 3(2x-1)). Returns a list of solutions.
+        Raises on parse/solve failure.
+        """
+        if not stem:
+            return []
+        lhs_rhs = self._extract_equation_from_stem(stem)
+        if not lhs_rhs:
+            return []
+        lhs_str, rhs_str = lhs_rhs
+        # Strip LaTeX math mode delimiters and extraneous punctuation before parsing
+        lhs_str = self._strip_latex_delimiters(lhs_str)
+        rhs_str = self._strip_latex_delimiters(rhs_str)
+        transformations = (*standard_transformations, implicit_multiplication_application)
+        try:
+            lhs = parse_expr(lhs_str, evaluate=True, transformations=transformations)
+            rhs = parse_expr(rhs_str, evaluate=True, transformations=transformations)
+            sym_var = sympy.symbols(variable)
+            sol = sympy.solve(sympy.Eq(lhs, rhs), sym_var)
+            print(f"[math] Solved equation: {sol}")
+            return sol if isinstance(sol, list) else [sol]
+        except Exception as e:
+            raise ValueError(f"Failed to parse/solve equation: {e}")
+
+    def _extract_equation_from_stem(self, stem: str) -> Optional[Tuple[str, str]]:
+        """Heuristically extract LHS and RHS around '=' from a sentence like
+        'Solve for x: 3(2x-5) = 4(x+1). What is ...' or similar.
+        """
+        if not stem:
+            return None
+        # Strip LaTeX upfront for easier matching
+        stem_clean = self._strip_latex_delimiters(stem)
+        # Try bounded between ':' and period/question or end
+        patterns = [
+            r":\s*(.+?)\s*=\s*(.+?)\s*(?:[\.?](?:\s*What|\s*$)|$)",
+            r":\s*(.+?)\s*=\s*(.+?)\s*$",
+            r"\b([^\n\r]+?)\s*=\s*([^\n\r]+?)\b"
+        ]
+        for pat in patterns:
+            m = re.search(pat, stem_clean, flags=re.IGNORECASE)
+            if m:
+                lhs, rhs = m.group(1).strip(), m.group(2).strip()
+                logger.info(f"[math] Extracted equation: LHS='{lhs}' | RHS='{rhs}'")
+                return lhs, rhs
+        # Fallback: split on first '=' if present
+        if '=' in stem_clean:
+            idx = stem_clean.find('=')
+            lhs = stem_clean[:idx].split(':')[-1].strip()
+            rhs = stem_clean[idx+1:].strip().rstrip('.?')
+            if lhs and rhs:
+                logger.info(f"[math] Fallback extracted equation: LHS='{lhs}' | RHS='{rhs}'")
+                return lhs, rhs
+        return None
+
+    def _parse_text_to_sympy_value(self, text: str) -> Optional[sympy.Expr]:
+        """Parse a numeric/symbolic value from option text such as 'x = 9/4' or '2.25'.
+        Returns a SymPy expression (Rational/Float) or None.
+        """
+        if not text:
+            return None
+        try:
+            # Prefer explicit assignment like x = value
+            m = re.search(r"(?i)\b[a-z]\s*=\s*([-+]?\d+(?:\.\d+)?(?:/\d+)?)", text)
+            candidate = None
+            if m:
+                candidate = m.group(1)
+            else:
+                # First fraction, decimal, or integer
+                m2 = re.search(r"([-+]?\d+(?:\.\d+)?/\d+)|([-+]?\d+\.\d+)|([-+]?\d+)", text)
+                if m2:
+                    candidate = next(g for g in m2.groups() if g)
+            if candidate is None:
+                return None
+            transformations = (*standard_transformations, implicit_multiplication_application)
+            return parse_expr(candidate, transformations=transformations)
+        except Exception:
+            return None
+
+    def _strip_latex_delimiters(self, text: str) -> str:
+        """Remove common LaTeX math mode delimiters and trailing punctuation that confuse parsing."""
+        if not text:
+            return ""
+        # Remove inline/display math delimiters and dollar signs
+        cleaned = re.sub(r"\\\(|\\\)|\\\[|\\\]", "", text)
+        cleaned = cleaned.replace("$", "")
+        # Trim redundant surrounding spaces and terminal punctuation
+        cleaned = cleaned.strip()
+        cleaned = re.sub(r"[\.;:,]$", "", cleaned)
+        return cleaned
+
+    def _parse_numeric_value_from_text(self, text: str) -> Optional[float]:
+        """Extract a numeric value from text, supporting forms like 'x = 9/4', 'x = 2.25', or plain '9/4'.
+        Returns None if no reliable value can be parsed.
+        """
+        if not text:
+            return None
+        try:
+            # Prefer explicit assignment like x = value (case-insensitive for variable)
+            match = re.search(r'(?i)\b[a-z]\s*=\s*([-+]?\d+(?:\.\d+)?(?:/\d+)?)', text)
+            candidate = None
+            if match:
+                candidate = match.group(1)
+            else:
+                # Fallback: look for first fraction or decimal/integer
+                m2 = re.search(r'([-+]?\d+(?:\.\d+)?/\d+)|([-+]?\d+\.\d+)|([-+]?\d+)', text)
+                if m2:
+                    candidate = next(g for g in m2.groups() if g)
+            if candidate is None:
+                return None
+            # Resolve fraction safely if present
+            if '/' in candidate:
+                num, den = candidate.split('/', 1)
+                den = den.strip()
+                if den == '0':
+                    return None
+                return float(num) / float(den)
+            return float(candidate)
+        except Exception:
+            return None
     
     async def _validate_grounding_novelty(self, question: QuestionCandidate, spec: Dict[str, Any]) -> ValidationResult:
         """Validate grounding and novelty (no copying from exemplars)"""

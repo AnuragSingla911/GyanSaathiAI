@@ -381,7 +381,7 @@ Generate the question. Respond with JSON only:
             "template": template_text,
             "distractors": distractors_text
         }) | self.llm
-        
+        print(f"Response: {response.content}")
         return self._parse_llm_response(response.content, spec, retrieval_result)
     
     async def _generate_direct(self, spec: Dict[str, Any], retrieval_result: Dict[str, Any],
@@ -414,7 +414,7 @@ Generate the question. Respond with JSON only:
             "question_type": spec["question_type"],
             "context": context
         })
-        
+        print(f"Response: {response.content}")
         return self._parse_llm_response(response.content, spec, retrieval_result)
     
     def _parse_llm_response(self, response_content: str, spec: Dict[str, Any], 
@@ -423,15 +423,35 @@ Generate the question. Respond with JSON only:
         try:
             question_data = json.loads(response_content)
             
-            return QuestionCandidate(
+            # Log raw response for debugging
+            logger.info(f"Raw LLM response keys: {list(question_data.keys())}")
+            logger.info(f"Raw correct_option_ids: {question_data.get('correct_option_ids')}")
+            logger.info(f"Raw correctOptionIds: {question_data.get('correctOptionIds')}")
+            logger.info(f"Raw canonical_solution: {question_data.get('canonical_solution')}")
+            logger.info(f"Raw canonicalSolution: {question_data.get('canonicalSolution')}")
+            
+            # Handle both camelCase and snake_case keys from LLM response
+            correct_option_ids = (
+                question_data.get("correct_option_ids") or 
+                question_data.get("correctOptionIds", [])
+            )
+            canonical_solution = (
+                question_data.get("canonical_solution") or 
+                question_data.get("canonicalSolution")
+            )
+            
+            logger.info(f"Final parsed correct_option_ids: {correct_option_ids}")
+            logger.info(f"Final parsed canonical_solution: {canonical_solution}")
+            
+            question_candidate = QuestionCandidate(
                 stem=question_data.get("stem", ""),
                 options=[
                     {"id": opt["id"], "text": opt["text"]}
                     for opt in question_data.get("options", [])
                 ],
-                correct_option_ids=question_data.get("correct_option_ids", []),
+                correct_option_ids=correct_option_ids,
                 question_type=spec["question_type"],
-                canonical_solution=question_data.get("canonical_solution"),
+                canonical_solution=canonical_solution,
                 explanation=question_data.get("explanation"),
                 citations=question_data.get("citations", []),
                 difficulty=spec["difficulty"],
@@ -439,8 +459,15 @@ Generate the question. Respond with JSON only:
                 skill_ids=spec["skills"]
             )
             
+            # Log the created QuestionCandidate for verification
+            logger.info(f"Created QuestionCandidate.correct_option_ids: {question_candidate.correct_option_ids}")
+            logger.info(f"Created QuestionCandidate.canonical_solution: {question_candidate.canonical_solution}")
+            
+            return question_candidate
+            
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response: {e}")
+            logger.error(f"Raw response content: {response_content}")
             return self._create_fallback_question(spec)
     
     async def _validation_phase(self, question: QuestionCandidate, spec: Dict[str, Any], 
@@ -467,6 +494,21 @@ Generate the question. Respond with JSON only:
             if not self.mongo_client:
                 logger.warning(f"⚠️ [Trace: {trace_id}] No MongoDB client, skipping persistence")
                 return {"status": "skipped", "reason": "no_mongo_client"}
+            
+            # Gate persistence: require all validators to pass and math consistency
+            all_passed = all(result.passed for result in validation_results.values())
+            math_result = validation_results.get("math")
+            math_issues = (math_result.details.get("issues", []) if math_result else [])
+            # Look for explicit inconsistency flags from math validator
+            inconsistency_markers = [
+                "Canonical solution value does not match the marked correct option",
+                "Solved answer from stem does not match the marked correct option"
+            ]
+            has_math_inconsistency = any(marker in math_issues for marker in inconsistency_markers)
+            if not all_passed or has_math_inconsistency:
+                reason = "validators_not_passed" if not all_passed else "math_inconsistency"
+                logger.warning(f"⚠️ [Trace: {trace_id}] Skipping persistence due to validation gating: {reason}")
+                return {"status": "skipped", "reason": reason}
             
             # Prepare document for MongoDB (backend 'questions' collection schema)
             db = self.mongo_client.get_default_database()

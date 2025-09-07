@@ -510,8 +510,19 @@ async def validate_question(question_data: Dict[str, Any]):
     
     try:
         # Convert dict to QuestionCandidate
+        question_dict = question_data.get("question", {})
+        print(f"[main] Raw question dict keys: {list(question_dict.keys())}")
+        print(f"[main] Raw correct_option_ids: {question_dict.get('correct_option_ids')}")
+        print(f"[main] Raw correctOptionIds: {question_dict.get('correctOptionIds')}")
+        print(f"[main] Raw canonical_solution: {question_dict.get('canonical_solution')}")
+        print(f"[main] Raw canonicalSolution: {question_dict.get('canonicalSolution')}")
+        
         from .models.schemas import QuestionCandidate
-        question = QuestionCandidate(**question_data.get("question", {}))
+        question = QuestionCandidate(**question_dict)
+        
+        print(f"[main] Created QuestionCandidate.correct_option_ids: {question.correct_option_ids}")
+        print(f"[main] Created QuestionCandidate.canonical_solution: {question.canonical_solution}")
+        
         spec = question_data.get("spec", {})
         
         # Run validation with auto-fix
