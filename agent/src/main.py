@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     
     # Initialize services
-    logger.info("Initializing GyanSaathiAI Agent v2 services...")
+    logger.info("Initializing TutorNestAI Agent v2 services...")
     
     # Initialize RAG retriever
     rag_retriever = RAGRetriever(
@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
         mongo_client.close()
 
 app = FastAPI(
-    title="GyanSaathiAI Agent",
+    title="TutorNestAI Agent",
     description="LangChain/LangGraph agent for question generation and content processing",
     version="1.0.0",
     lifespan=lifespan

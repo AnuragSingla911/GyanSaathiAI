@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🏗️  Building GyanSaathiAI single container..."
+echo "🏗️  Building TutorNestAI single container..."
 
 # Check if Docker is running
 if ! docker info >/dev/null 2>&1; then

@@ -1,4 +1,4 @@
--- GyanSaathiAI App Database Schema
+-- TutorNestAI App Database Schema
 -- PostgreSQL initialization script
 
 -- Enable required extensions

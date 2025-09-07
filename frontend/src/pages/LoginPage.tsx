@@ -76,7 +76,7 @@ const LoginPage: React.FC = () => {
         >
           <School sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
           <Typography component="h1" variant="h4" fontWeight="bold">
-            GyanSaathiAI
+            TutorNestAI
           </Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center">
             Your personalized learning companion

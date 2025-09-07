@@ -27,7 +27,7 @@
     "react",
     "nodejs"
   ],
-  "author": "GyanSaathiAI Team",
+  "author": "TutorNestAI Team",
   "license": "",
   "devDependencies": {
     "concurrently": "^8.2.2",

@@ -9,8 +9,8 @@ export default defineConfig({
     //   registerType: 'autoUpdate',
     //   includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
     //   manifest: {
-    //     name: 'GyanSaathiAI App',
-    //     short_name: 'GyanSaathiAI',
+    //     name: 'TutorNestAI App',
+    //     short_name: 'TutorNestAI',
     //     description: 'AI-powered tutoring for 6th-10th grade students',
     //     theme_color: '#1976d2',
     //     icons: [

@@ -1,4 +1,4 @@
-# GyanSaathiAI
+# TutorNestAI
 
 An AI-powered tutoring platform with subject/topic-specific quizzes, LLM-driven question generation, and Airflow-based batch pipelines. Built with React, Node.js (GraphQL), FastAPI (LangChain/LangGraph), PostgreSQL, MongoDB, Redis, and Airflow — orchestrated via Docker Compose.
 

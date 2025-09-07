@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting GyanSaathiAI development environment..."
+echo "🚀 Starting TutorNestAI development environment..."
 
 # Check if Docker is running
 if ! docker info >/dev/null 2>&1; then
@@ -33,7 +33,7 @@ echo "📊 Service Status:"
 docker-compose ps
 
 echo ""
-echo "✅ GyanSaathiAI is running!"
+echo "✅ TutorNestAI is running!"
 echo ""
 echo "🌐 Access Points:"
 echo "  Frontend:      http://localhost:3000"

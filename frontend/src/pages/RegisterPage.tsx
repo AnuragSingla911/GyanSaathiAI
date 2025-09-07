@@ -72,7 +72,7 @@ const RegisterPage: React.FC = () => {
         >
           <School sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
           <Typography component="h1" variant="h4" fontWeight="bold">
-            Join GyanSaathiAI
+            Join TutorNestAI
           </Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center">
             Start your personalized learning journey

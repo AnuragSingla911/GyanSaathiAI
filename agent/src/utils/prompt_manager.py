@@ -1,5 +1,5 @@
 """
-Prompt management utilities for GyanSaathiAI Agent
+Prompt management utilities for TutorNestAI Agent
 """
 
 import os

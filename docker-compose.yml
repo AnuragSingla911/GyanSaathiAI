@@ -1,4 +1,4 @@
-# Docker Compose file for GyanSaathiAI
+# Docker Compose file for TutorNestAI
 
 services:
   # PostgreSQL Database for user data, quiz attempts, progress, and RAG corpus
