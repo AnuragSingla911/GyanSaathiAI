@@ -54,28 +54,25 @@ class SimplifiedQuestionValidator:
     def _setup_validation_prompt(self):
         """Setup prompt for LLM-based validation"""
         self.validation_prompt = ChatPromptTemplate.from_template("""
-You are an expert educator reviewing a multiple choice question. Your task is to answer the question based on your knowledge and verify if the marked correct answer is actually correct.
+You are an expert educator answering a multiple choice question. Your task is to solve the question and choose the correct answer.
 
-**Question to Review:**
+**Question:**
 {question_stem}
 
 **Options:**
 {options_text}
 
-**Marked Correct Answer:** {marked_correct}
-
 **Instructions:**
 1. Read the question carefully
 2. Think through the problem step by step
-3. Choose the option you believe is correct based on your knowledge
-4. Provide your reasoning
+3. Choose the option you believe is correct
+4. Provide your reasoning and confidence
 
 **Required JSON Output:**
 {{
   "chosen_option_id": "your_choice_letter",
   "reasoning": "step-by-step explanation of your choice",
-  "confidence": 0.95,
-  "matches_marked_correct": true/false
+  "confidence": 0.95
 }}
 
 Answer the question now and respond with JSON only:
@@ -94,7 +91,6 @@ Answer the question now and respond with JSON only:
         if not self.llm:
             logger.error("❌ No LLM available for validation")
             return {
-                "overall_passed": False,  # Add this for persistence logic
                 "llm_consensus": ValidationResult(
                     validator_name="llm_consensus",
                     passed=False,
@@ -108,15 +104,14 @@ Answer the question now and respond with JSON only:
             schema_valid, schema_issues = self._validate_basic_schema(question)
             if not schema_valid:
                 return {
-                "overall_passed": False,  # Add this for persistence logic
-                "llm_consensus": ValidationResult(
-                    validator_name="llm_consensus",
-                    passed=False,
-                    score=0.0,
-                    error_message=f"Schema validation failed: {', '.join(schema_issues)}",
-                    details={"schema_issues": schema_issues}
-                )
-            }
+                    "llm_consensus": ValidationResult(
+                        validator_name="llm_consensus",
+                        passed=False,
+                        score=0.0,
+                        error_message=f"Schema validation failed: {', '.join(schema_issues)}",
+                        details={"schema_issues": schema_issues}
+                    )
+                }
             
             # Prepare question for LLM validation
             options_text = "\\n".join([f"{opt.id.upper()}. {opt.text}" for opt in question.options])
@@ -144,22 +139,26 @@ Answer the question now and respond with JSON only:
                     chain = self.validation_prompt | self.llm
                     response = await chain.ainvoke({
                         "question_stem": question.stem,
-                        "options_text": options_text,
-                        "marked_correct": marked_correct.upper()
+                        "options_text": options_text
                     })
-                    
+
                     # Parse response
                     validation_result = json.loads(response.content)
+                    
+                    # Add our own comparison logic
+                    chosen = validation_result.get('chosen_option_id', 'unknown').lower()
+                    matches = chosen == marked_correct.lower()
+                    validation_result['matches_marked_correct'] = matches
+                    
                     validation_attempts.append(validation_result)
                     successful_attempts += 1
-                    
+
                     # Print detailed results for this attempt
-                    chosen = validation_result.get('chosen_option_id', 'unknown').upper()
-                    matches = validation_result.get('matches_marked_correct', False)
+                    chosen_display = chosen.upper()
                     confidence = validation_result.get('confidence', 0.0)
                     reasoning = validation_result.get('reasoning', 'No reasoning provided')
                     
-                    print(f"🎯 LLM Chose: {chosen}")
+                    print(f"🎯 LLM Chose: {chosen_display}")
                     print(f"✅ Matches Correct: {matches}")
                     print(f"📊 Confidence: {confidence:.2f}")
                     print(f"💭 Reasoning: {reasoning[:200]}{'...' if len(reasoning) > 200 else ''}")
@@ -202,7 +201,6 @@ Answer the question now and respond with JSON only:
                       f"(score: {consensus_result['consensus_score']:.2f})")
             
             return {
-                "overall_passed": validation_passed,  # Add this for persistence logic
                 "llm_consensus": ValidationResult(
                     validator_name="llm_consensus",
                     passed=validation_passed,
@@ -223,9 +221,8 @@ Answer the question now and respond with JSON only:
         except Exception as e:
             logger.error(f"❌ LLM consensus validation failed: {str(e)}")
             return {
-                "overall_passed": False,  # Add this for persistence logic
                 "llm_consensus": ValidationResult(
-                    validator_name="llm_consensus", 
+                    validator_name="llm_consensus",
                     passed=False,
                     score=0.0,
                     error_message=str(e)
@@ -327,7 +324,6 @@ Answer the question now and respond with JSON only:
             schema_valid, schema_issues = self._validate_basic_schema(question)
             
             return {
-                "overall_passed": schema_valid,  # Add this for persistence logic
                 "schema_only": ValidationResult(
                     validator_name="schema_only",
                     passed=schema_valid,
@@ -344,7 +340,6 @@ Answer the question now and respond with JSON only:
         except Exception as e:
             logger.error(f"❌ Fallback validation failed: {str(e)}")
             return {
-                "overall_passed": False,  # Add this for persistence logic
                 "schema_only": ValidationResult(
                     validator_name="schema_only",
                     passed=False,

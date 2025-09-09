@@ -151,7 +151,7 @@ Generate the question now. Respond with JSON only:
                 "generation_time_ms": generation_time,
                 "orchestration_path": "simplified_rag_llm",
                 "metadata": {
-                    "validation_passed": validation_result.get("overall_passed", False),
+                    "validation_passed": any(v.passed for v in validation_result.values() if hasattr(v, 'passed')),
                     "persistence_id": persistence_result.get("document_id"),
                     "rag_chunks_used": len(rag_context.get("chunks", []))
                 }
@@ -271,7 +271,8 @@ Generate the question now. Respond with JSON only:
         try:
             validation_result = await self.validator.validate_with_llm_consensus(question, spec)
             
-            logger.info(f"📊 [Trace: {trace_id}] Validation completed: {validation_result.get('overall_passed', False)}")
+            validation_passed = any(v.passed for v in validation_result.values() if hasattr(v, 'passed'))
+            logger.info(f"📊 [Trace: {trace_id}] Validation completed: {validation_passed}")
             
             return validation_result, question
             
@@ -336,7 +337,8 @@ Generate the question now. Respond with JSON only:
                 return {"status": "skipped", "reason": "no_mongo_client"}
             
             # Only persist if validation passed
-            if not validation_results.get("overall_passed", False):
+            validation_passed = any(v.passed for v in validation_results.values() if hasattr(v, 'passed'))
+            if not validation_passed:
                 logger.warning(f"⚠️ [Trace: {trace_id}] Skipping persistence due to validation failure")
                 return {"status": "skipped", "reason": "validation_failed"}
             

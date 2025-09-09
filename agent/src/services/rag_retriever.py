@@ -27,52 +27,38 @@ class RAGRetriever:
             )
             logger.info("✅ Initialized OpenAI embeddings")
             
-            # Force recreation of collection by dropping existing one first
+            # Connect to existing math_exemplars collection (don't drop it!)
             import psycopg2
             conn = psycopg2.connect(self.postgres_url)
             try:
                 with conn.cursor() as cursor:
                     # Check if collection exists
                     cursor.execute("""
-                        SELECT uuid FROM langchain_pg_collection 
-                        WHERE name = 'corpus_chunks'
+                        SELECT c.uuid, COUNT(e.uuid) as embedding_count
+                        FROM langchain_pg_collection c
+                        LEFT JOIN langchain_pg_embedding e ON c.uuid = e.collection_id
+                        WHERE c.name = 'math_exemplars'
+                        GROUP BY c.uuid
                     """)
-                    existing_collection = cursor.fetchone()
+                    result = cursor.fetchone()
                     
-                    if existing_collection:
-                        collection_id = existing_collection[0]
-                        logger.info(f"Found existing collection: {collection_id}")
-                        
-                        # Drop all embeddings for this collection
-                        cursor.execute("""
-                            DELETE FROM langchain_pg_embedding 
-                            WHERE collection_id = %s
-                        """, (collection_id,))
-                        logger.info("✅ Cleared existing embeddings")
-                        
-                        # Drop the collection
-                        cursor.execute("""
-                            DELETE FROM langchain_pg_collection 
-                            WHERE name = 'corpus_chunks'
-                        """)
-                        logger.info("✅ Dropped existing collection")
-                        
-                        conn.commit()
-                        logger.info("✅ Collection cleanup completed")
+                    if result:
+                        collection_id, embedding_count = result
+                        logger.info(f"✅ Found existing math_exemplars collection: {collection_id}")
+                        logger.info(f"✅ Collection has {embedding_count} existing embeddings")
                     else:
-                        logger.info("No existing collection found")
+                        logger.info("⚠️ No math_exemplars collection found - will be created when first used")
                         
             except Exception as e:
-                logger.error(f"Error during collection cleanup: {e}")
-                conn.rollback()
+                logger.error(f"Error checking collection status: {e}")
             finally:
                 conn.close()
             
-            # Initialize PGVector store with fresh collection
+            # Initialize PGVector store connection to math_exemplars collection
             self.vector_store = PGVector(
                 connection_string=self.postgres_url,
                 embedding_function=self.embeddings,
-                collection_name="corpus_chunks"
+                collection_name="math_exemplars"
             )
             logger.info("✅ Connected to PGVector for RAG retrieval")
             
@@ -103,14 +89,14 @@ class RAGRetriever:
             logger.info(f"🔍 RAG Search - Subject: '{subject}'")
             logger.info(f"🔍 RAG Search - Class Level: '{class_level}'")
             
-            # Build filter for metadata
-            filter_dict = {}
-            if subject:
+            # Build filter for metadata (using Hendrycks math_exemplars structure)
+            filter_dict = {"type": "math_exemplar"}  # Always filter for math exemplars
+            if subject and subject != "math":
+                # If specific subject is requested (algebra, geometry, etc.), filter by it
                 filter_dict["subject"] = subject
-            if class_level:
-                # Normalize class level: "grade_8" -> "8", "grade_9" -> "9"
-                normalized_class = class_level.replace("grade_", "") if class_level.startswith("grade_") else class_level
-                filter_dict["class"] = normalized_class
+            # Note: If subject="math", we search across ALL math subjects in Hendrycks dataset
+            # Note: Hendrycks dataset doesn't have class_level, it has difficulty levels
+            # We'll ignore class_level for now since we're using high-quality math problems
             
             # Use LangChain's similarity search
             docs = self.vector_store.similarity_search(
@@ -121,20 +107,21 @@ class RAGRetriever:
             
             logger.info(f"🔍 RAG Search - Retrieved {len(docs)} documents")
             
-            # Convert LangChain Documents to our format
+            # Convert LangChain Documents to our format (adapted for Hendrycks exemplars)
             chunks = []
             for doc in docs:
                 chunk = {
-                    "chunk_id": doc.metadata.get("custom_id", "unknown"),
+                    "chunk_id": doc.metadata.get("exemplar_id", doc.metadata.get("index", "unknown")),
                     "text": doc.page_content,
-                    "skill_ids": doc.metadata.get("skill_ids", []),
+                    "skill_ids": [],  # Hendrycks doesn't have skill_ids
                     "metadata": doc.metadata,
                     "subject": doc.metadata.get("subject", "unknown"),
-                    "class_level": doc.metadata.get("class", "unknown"),
-                    "chapter": doc.metadata.get("chapter"),
-                    "module": doc.metadata.get("module"),
-                    "title": doc.metadata.get("title"),
-                    "source": doc.metadata.get("source"),
+                    "class_level": doc.metadata.get("level", "unknown"),  # Use level instead of class
+                    "chapter": None,  # Hendrycks doesn't have chapters
+                    "module": None,   # Hendrycks doesn't have modules
+                    "title": f"Math Problem - {doc.metadata.get('subject', 'Unknown Subject')}",
+                    "source": doc.metadata.get("source", "hendrycks_math"),
+                    "difficulty": doc.metadata.get("difficulty", "unknown"),
                     "relevance_score": 1.0  # LangChain doesn't provide scores by default
                 }
                 chunks.append(chunk)
