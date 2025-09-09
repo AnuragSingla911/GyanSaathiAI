@@ -14,7 +14,7 @@ from langchain_core.runnables import RunnableLambda
 from .services.enhanced_generator import EnhancedQuestionGenerator
 from .services.hendrycks_dataset import HendrycksDatasetManager
 from .services.rag_retriever import RAGRetriever
-from .services.validators import EnhancedQuestionValidator
+from .services.simplified_validator import SimplifiedQuestionValidator
 from .models.schemas import (
     QuestionGenerationRequest,
     QuestionCandidate,
@@ -33,14 +33,14 @@ logger = logging.getLogger(__name__)
 
 # Global services
 rag_retriever: Optional[RAGRetriever] = None
-enhanced_validator: Optional[EnhancedQuestionValidator] = None
+simplified_validator: Optional[SimplifiedQuestionValidator] = None
 enhanced_generator: Optional[EnhancedQuestionGenerator] = None
 hendrycks_manager: Optional[HendrycksDatasetManager] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize services on startup"""
-    global rag_retriever, enhanced_validator, enhanced_generator, hendrycks_manager
+    global rag_retriever, simplified_validator, enhanced_generator, hendrycks_manager
     
     settings = get_settings()
     
@@ -71,8 +71,8 @@ async def lifespan(app: FastAPI):
     from pymongo import MongoClient
     mongo_client = MongoClient(settings.mongo_url)
     
-    # Initialize validator (v2 only)
-    enhanced_validator = EnhancedQuestionValidator(settings, mongo_client)
+    # Initialize simplified validator
+    simplified_validator = SimplifiedQuestionValidator(settings, mongo_client)
     
     # Initialize v2 generator only
     enhanced_generator = EnhancedQuestionGenerator(
@@ -108,7 +108,7 @@ async def health_check():
     """Health check endpoint"""
     services_status = {
         "rag_retriever": "healthy" if rag_retriever and rag_retriever.is_healthy() else "unhealthy",
-        "enhanced_validator": "healthy" if enhanced_validator else "unhealthy",
+        "simplified_validator": "healthy" if simplified_validator else "unhealthy",
         "enhanced_generator": "healthy" if enhanced_generator else "unhealthy",
         "hendrycks_manager": "healthy" if hendrycks_manager else "unhealthy"
     }
@@ -118,7 +118,7 @@ async def health_check():
     return HealthResponse(
         status=overall_status,
         services=services_status,
-        version="2.0.0"
+        version="2.1.0-simplified"
     )
 
 # v1 single-question endpoint removed
@@ -163,8 +163,7 @@ async def ingest_embedding(request: dict):
         logger.error(f"Error ingesting document: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to ingest document: {str(e)}")
 
-@app.post("/ingestSampleCorpus")
-async def ingest_sample_corpus():
+
     """Ingest sample corpus data for testing"""
     try:
         if not rag_retriever:
@@ -504,9 +503,9 @@ async def get_agent_config():
 
 @app.post("/admin/validate")
 async def validate_question(question_data: Dict[str, Any]):
-    """ADMIN ONLY: Validate a question using enhanced validator"""
-    if not enhanced_validator:
-        raise HTTPException(status_code=503, detail="Enhanced validator not available")
+    """ADMIN ONLY: Validate a question using simplified validator"""
+    if not simplified_validator:
+        raise HTTPException(status_code=503, detail="Simplified validator not available")
     
     try:
         # Convert dict to QuestionCandidate
@@ -525,28 +524,19 @@ async def validate_question(question_data: Dict[str, Any]):
         
         spec = question_data.get("spec", {})
         
-        # Run validation with auto-fix
-        validation_results, fixed_question = await enhanced_validator.validate_with_autofix(question, spec)
+        # Run LLM consensus validation
+        validation_results = await simplified_validator.validate_with_llm_consensus(question, spec)
         
         return {
             "success": True,
-            "validation_results": {
-                name: {
-                    "validator_name": result.validator_name,
-                    "passed": result.passed,
-                    "score": result.score,
-                    "details": result.details,
-                    "error_message": result.error_message
-                }
-                for name, result in validation_results.items()
+            "validation_results": validation_results,
+            "question": {
+                "stem": question.stem,
+                "options": [{"id": opt.id, "text": opt.text} for opt in question.options],
+                "correct_option_ids": question.correct_option_ids,
+                "explanation": question.explanation
             },
-            "fixed_question": {
-                "stem": fixed_question.stem,
-                "options": [{"id": opt.id, "text": opt.text} for opt in fixed_question.options],
-                "correct_option_ids": fixed_question.correct_option_ids,
-                "explanation": fixed_question.explanation
-            },
-            "overall_passed": all(result.passed for result in validation_results.values())
+            "overall_passed": validation_results.get("overall_passed", False)
         }
         
     except Exception as e:

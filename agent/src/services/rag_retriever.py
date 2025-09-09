@@ -108,7 +108,9 @@ class RAGRetriever:
             if subject:
                 filter_dict["subject"] = subject
             if class_level:
-                filter_dict["class"] = class_level
+                # Normalize class level: "grade_8" -> "8", "grade_9" -> "9"
+                normalized_class = class_level.replace("grade_", "") if class_level.startswith("grade_") else class_level
+                filter_dict["class"] = normalized_class
             
             # Use LangChain's similarity search
             docs = self.vector_store.similarity_search(
