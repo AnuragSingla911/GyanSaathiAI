@@ -50,7 +50,7 @@ class EnhancedQuestionGenerator:
         if LANGCHAIN_AVAILABLE and hasattr(self.settings, 'openai_api_key') and self.settings.openai_api_key:
             self.llm = ChatOpenAI(
                 model=getattr(self.settings, 'openai_model', 'gpt-3.5-turbo'),
-                temperature=0.95,  # Maximum temperature for variety
+                temperature=0.6,  # Balanced: some variety but maintains accuracy
                 max_tokens=getattr(self.settings, 'max_tokens', 1000),
                 openai_api_key=self.settings.openai_api_key,
                 model_kwargs={
@@ -156,6 +156,13 @@ You are an expert educational item writer. Generate ONE completely NEW and ORIGI
 - INVENT new numerical values, names, situations, and contexts while maintaining the learning objective
 - FOLLOW the educational structure and complexity level demonstrated in the reference material
 
+# MATHEMATICAL ACCURACY REQUIREMENTS
+- VERIFY all calculations are correct before finalizing the question
+- ENSURE the correct answer actually matches one of the provided options
+- USE simple, clean numbers that lead to exact answers (avoid complex fractions unless necessary)
+- DOUBLE-CHECK that all mathematical steps lead to the intended correct option
+- TEST the problem yourself: can you solve it and get the marked correct answer?
+
 # Hard Rules (must follow)
 1) Output **valid JSON only** (no markdown, no explanations outside JSON, no trailing commas).
 2) JSON must match this exact structure and keys:
@@ -182,6 +189,7 @@ You are an expert educational item writer. Generate ONE completely NEW and ORIGI
 8) "explanation": short, learner-friendly concept explanation (what idea this problem tests and why the correct option is right).
 9) "citations": reference the RAG context that inspired your approach. Format: [{{"chunk_id":"source_X","text":"Inspired by [concept/pattern] from this source"}}]. Do NOT quote verbatim.
 10) CREATE entirely original content - if RAG shows "solve 2x + 3 = 7", create something like "solve 4y - 5 = 11" or use completely different contexts.
+11) VERIFICATION STEP: After creating the question, solve it step-by-step to confirm your marked correct answer is actually correct.
 
 # Quality Guidance for Original Content Creation
 - Align difficulty with the requested level by adjusting numbers and required steps (easy: direct recall/application; medium: 1–2 steps; hard: multi-step or subtle misconception).
@@ -308,11 +316,10 @@ Generate the question now and return ONLY the JSON object with these exact keys 
                 "methods", "techniques", "problems", "solutions", "analysis"
             ]
             
-            # Randomly add 1-2 variety terms to diversify search results
-            if query_parts:
-                num_variety_terms = random.randint(1, 2)
-                selected_terms = random.sample(search_variety_terms, num_variety_terms)
-                query_parts.extend(selected_terms)
+            # Randomly add 0-1 variety terms (reduced randomization for better quality)
+            if query_parts and random.random() < 0.7:  # 70% chance to add variety term
+                selected_term = random.choice(search_variety_terms)
+                query_parts.append(selected_term)
             
             search_query = " ".join(query_parts) if query_parts else "general knowledge"
             
@@ -328,11 +335,16 @@ Generate the question now and return ONLY the JSON object with these exact keys 
                     limit=15  # Get more chunks for randomization
                 )
                 
-                # Randomly select 3-5 chunks from the results to add variety
+                # Select top chunks with some variety (favor quality over randomness)
                 if raw_chunks:
-                    num_chunks = random.randint(3, min(5, len(raw_chunks)))
-                    chunks = random.sample(raw_chunks, num_chunks)
-                    logger.info(f"✅ [Trace: {trace_id}] Retrieved {len(raw_chunks)} raw chunks, randomly selected {len(chunks)}")
+                    # Take top 3-4 chunks (highest quality) plus 1-2 random ones for variety
+                    top_chunks = raw_chunks[:3]
+                    if len(raw_chunks) > 3:
+                        additional_chunks = random.sample(raw_chunks[3:], min(2, len(raw_chunks) - 3))
+                        chunks = top_chunks + additional_chunks
+                    else:
+                        chunks = top_chunks
+                    logger.info(f"✅ [Trace: {trace_id}] Retrieved {len(raw_chunks)} raw chunks, selected {len(chunks)} (top quality + some variety)")
                 else:
                     chunks = raw_chunks
                     logger.info(f"✅ [Trace: {trace_id}] Retrieved {len(chunks)} RAG chunks")
@@ -382,7 +394,7 @@ Generate the question now and return ONLY the JSON object with these exact keys 
                 # Create a unique LLM instance for each request to break caching
                 unique_llm = ChatOpenAI(
                     model=self.llm.model_name,
-                    temperature=0.95,
+                    temperature=0.6,  # Balanced temperature for accuracy
                     max_tokens=self.llm.max_tokens,
                     openai_api_key=self.llm.openai_api_key,
                     model_kwargs={

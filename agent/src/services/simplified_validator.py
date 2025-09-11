@@ -320,6 +320,14 @@ Answer the question now and respond with JSON only:
             logger.info(f"🎯 Marked correct key: {marked_key}")
             logger.info(f"🤖 Judge A model: {getattr(self.settings, 'validator_model_A', 'default')}")
             logger.info(f"🤖 Judge B model: {getattr(self.settings, 'validator_model_B', 'default')}")
+            
+            # Log the complete question being validated
+            logger.info(f"📝 COMPLETE QUESTION STEM: {question.stem}")
+            logger.info(f"📋 OPTIONS:")
+            for opt in question.options:
+                marker = "✅" if opt.id.lower() == question.correct_option_ids[0].lower() else "  "
+                logger.info(f"   {marker} {opt.id.upper()}. {opt.text}")
+            logger.info(f"🎯 CORRECT ANSWER: {question.correct_option_ids[0].upper()}")
 
             # 2) Judge A (neutral solver) - 5 attempts with shuffle variations
             A_results = []
@@ -330,6 +338,7 @@ Answer the question now and respond with JSON only:
                     chosen_key = letter_to_key.get(res["chosen_option_id"], "invalid") if res["chosen_option_id"] in ("a","b","c","d") else "invalid"
                     A_results.append({"key": chosen_key, "confidence": res["confidence"], "raw": res, "layout": layout})
                     logger.info(f"📊 Judge A attempt {i+1}: {res['chosen_option_id']} -> {chosen_key} (conf: {res['confidence']:.2f})")
+                    logger.info(f"💭 Judge A reasoning {i+1}: {res.get('reasoning', 'No reasoning provided')}")
                 except Exception as e:
                     logger.warning(f"⚠️ Judge A attempt {i+1} failed: {e}")
                     A_results.append({"key": "invalid", "confidence": 0.0, "raw": {"error": str(e)}, "layout": layout})
@@ -343,6 +352,7 @@ Answer the question now and respond with JSON only:
                     chosen_key = letter_to_key.get(res["chosen_option_id"], "invalid") if res["chosen_option_id"] in ("a","b","c","d") else "invalid"
                     B_results.append({"key": chosen_key, "confidence": res["confidence"], "raw": res, "layout": layout})
                     logger.info(f"🔍 Judge B attempt {i+1}: {res['chosen_option_id']} -> {chosen_key} (conf: {res['confidence']:.2f})")
+                    logger.info(f"🕵️ Judge B reasoning {i+1}: {res.get('reasoning', 'No reasoning provided')}")
                 except Exception as e:
                     logger.warning(f"⚠️ Judge B attempt {i+1} failed: {e}")
                     B_results.append({"key": "invalid", "confidence": 0.0, "raw": {"error": str(e)}, "layout": layout})
@@ -355,6 +365,8 @@ Answer the question now and respond with JSON only:
                 res_para = await self._judge_once(self.llm_A, PROMPT_A, para_stem, block)
                 para_key = letter_to_key.get(res_para["chosen_option_id"], "invalid") if res_para["chosen_option_id"] in ("a","b","c","d") else "invalid"
                 logger.info(f"🔄 Paraphrase test: {res_para['chosen_option_id']} -> {para_key}")
+                logger.info(f"🔄 Paraphrase reasoning: {res_para.get('reasoning', 'No reasoning provided')}")
+                logger.info(f"🔄 Paraphrased stem: '{para_stem}'")
             except Exception as e:
                 logger.warning(f"⚠️ Paraphrase test failed: {e}")
 
@@ -412,6 +424,23 @@ Answer the question now and respond with JSON only:
             failed_criteria = [k for k, v in criteria.items() if not v]
             if failed_criteria:
                 logger.info(f"❌ Failed criteria: {failed_criteria}")
+                
+                # Log detailed reasoning summary for failed validations
+                if not passed:
+                    logger.info(f"📋 Detailed Reasoning Summary:")
+                    logger.info(f"   📝 Question: {question.stem[:100]}{'...' if len(question.stem) > 100 else ''}")
+                    logger.info(f"   🎯 Marked correct: {marked_key}")
+                    
+                    # Judge A summary
+                    A_answers = [f"{r['raw'].get('chosen_option_id', '?')}({r['confidence']:.1f})" for r in A_results[:3]]
+                    logger.info(f"   📊 Judge A sample answers: {A_answers}")
+                    
+                    # Judge B summary with reasoning
+                    for i, result in enumerate(B_results):
+                        reasoning = result['raw'].get('reasoning', 'No reasoning')[:100]
+                        logger.info(f"   🕵️ Judge B attempt {i+1}: {result['raw'].get('chosen_option_id', '?')} - {reasoning}{'...' if len(result['raw'].get('reasoning', '')) > 100 else ''}")
+                    
+                    logger.info(f"   ❌ Validation failed - question needs improvement")
 
             details = {
                 "A_consensus": A, "B_consensus": B,
