@@ -49,6 +49,13 @@ Return JSON only:
   "confidence": 0.0-1.0
 }}
 
+CRITICAL SELECTION PROCESS:
+1. Solve the problem step-by-step first
+2. Find your calculated answer
+3. CAREFULLY match your answer to the EXACT option text
+4. The "chosen_option_id" must be the letter (a/b/c/d) of the option that EXACTLY matches your calculated result
+5. Double-check: if you calculated "120b^{{10}}", choose the option with "120b^{{10}}", NOT "120b^{{12}}"
+
 Rules:
 - Choose the truly correct option. If ambiguous, multiple correct, or insufficient data -> "invalid".
 - Be strict and literal; do not assume facts not stated.
@@ -74,6 +81,17 @@ Return JSON only:
   "reasoning": "brief audit highlighting any flaw or why none exists",
   "confidence": 0.0-1.0
 }}
+
+CRITICAL EVALUATION PROCESS:
+1. Solve the problem independently and find the correct mathematical answer
+2. Check if your calculated answer matches EXACTLY one of the provided options
+3. Look for genuine flaws: mathematical errors, true ambiguity, impossible problems
+4. CAREFULLY match your answer to the EXACT option text
+5. The "chosen_option_id" must be the letter (a/b/c/d) of the option that EXACTLY matches your calculated result
+
+Important Notes:
+- Different coefficients (120 vs 240) or exponents (b^10 vs b^12) are NOT ambiguous - they are clearly different answers
+- Only mark "invalid" if there are genuine mathematical or logical flaws
 
 Confidence guide: 1.0 = no flaws found, completely valid; 0.8 = minor concerns but overall valid; 0.6 = some issues but acceptable; 0.4 = significant concerns; 0.2 = major flaws; 0.0 = completely invalid/unsolvable
 """

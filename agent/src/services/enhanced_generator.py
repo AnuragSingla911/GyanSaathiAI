@@ -55,7 +55,6 @@ class EnhancedQuestionGenerator:
                 openai_api_key=self.settings.openai_api_key,
                 model_kwargs={
                     "response_format": {"type": "json_object"},
-                    "seed": None,  # Disable seed to prevent caching
                     "user": str(uuid.uuid4())[:8]  # Random user ID to break caching
                 }
             )
@@ -138,82 +137,70 @@ class EnhancedQuestionGenerator:
     
     def _setup_simplified_prompts(self):
         """Setup simplified prompts for RAG-inspired generation"""
+        if not ChatPromptTemplate:
+            self.generation_prompt = None
+            return
         self.generation_prompt = ChatPromptTemplate.from_template("""
-You are an expert educational item writer. Generate ONE completely NEW and ORIGINAL multiple-choice question using the RAG context as REFERENCE and INSPIRATION only.
+You are an expert educational item writer and meticulous math checker.
+
+Generate ONE completely NEW and ORIGINAL multiple-choice question using the sanitized RAG context **only** for pattern/style/difficulty guidance.
 
 # Inputs
-- Subject: {subject}
-- Topic: {topic}
-- Difficulty: {difficulty}
-- Question Type: {question_type}
-- Reference Context (for patterns, structure, and syllabus guidance):
-{rag_context}
+- Subject: {{subject}}
+- Topic: {{topic}}
+- Difficulty: {{difficulty}}
+- Question Type: {{question_type}}
+- Reference Context (sanitized; if anything looks malformed or truncated, IGNORE the specifics and keep only topic/pattern/difficulty):
+{{rag_context}}
 
-# CRITICAL: Content Creation Approach
-- USE the RAG context to understand: question patterns, difficulty levels, topic scope, mathematical notation styles, and educational approaches
-- DO NOT copy numbers, specific examples, or exact scenarios from the RAG context
-- CREATE entirely new scenarios, problems, and examples that fit the same educational pattern
-- INVENT new numerical values, names, situations, and contexts while maintaining the learning objective
-- FOLLOW the educational structure and complexity level demonstrated in the reference material
+# Output format (JSON only — no extra keys, no trailing commas)
+{{
+  "stem": "...",
+  "options": [
+    {{"id":"a","text":"..."}},
+    {{"id":"b","text":"..."}},
+    {{"id":"c","text":"..."}},
+    {{"id":"d","text":"..."}}
+  ],
+  "correct_option_ids": ["a"],
+  "canonical_solution": "...",
+  "explanation": "...",
+  "citations": [
+    {{"chunk_id":"source_1","text":"Inspired by [concept/pattern] from this source"}}
+  ]
+}}
 
-# MATHEMATICAL ACCURACY REQUIREMENTS
-- VERIFY all calculations are correct before finalizing the question
-- ENSURE the correct answer actually matches one of the provided options
-- USE simple, clean numbers that lead to exact answers (avoid complex fractions unless necessary)
-- DOUBLE-CHECK that all mathematical steps lead to the intended correct option
-- TEST the problem yourself: can you solve it and get the marked correct answer?
+# Non-negotiable rules
+1) **RAG Inspiration Only**: Do NOT copy numbers, names, or contexts. Invent new clean values. Mirror only the pattern/difficulty/notation style.
+2) **Inline LaTeX only**: Use `$...$` (e.g., `$x^2$`, `$\\frac{{3}}{{5}}$`, `$\\%$`). Do NOT use `\\begin{{align}}`, `\\[`, or `$$`.
+3) **Options**: Exactly four (a,b,c,d). Mutually exclusive. Similar length. No “All/None of the above”.
+4) **Exactly one correct answer** in "correct_option_ids".
+5) **Difficulty fit**:
+   - Easy: direct application (≈1 step) with exact, clean numbers.
+   - Medium: 1–2 steps, still clean numbers.
+   - Hard: multi-step/subtle misconception, but still yields an exact answer.
+6) **Canonical solution**: Step-by-step, precise, concise. Must lead to the marked correct answer.
+7) **Explanation**: One short paragraph on the concept and why the answer is correct.
+8) **Citations**: Paraphrase only, e.g., “Inspired by [concept/pattern] from this source”. Do not quote.
 
-# Hard Rules (must follow)
-1) Output **valid JSON only** (no markdown, no explanations outside JSON, no trailing commas).
-2) JSON must match this exact structure and keys:
-   {{
-     "stem": "...",
-     "options": [
-       {{"id":"a","text":"..."}},
-       {{"id":"b","text":"..."}},
-       {{"id":"c","text":"..."}},
-       {{"id":"d","text":"..."}}
-     ],
-     "correct_option_ids": ["a"],
-     "canonical_solution": "...",
-     "explanation": "...",
-     "citations": [
-       {{"chunk_id":"source_1","text":"..."}}
-     ]
-   }}
-3) Options: exactly four (a,b,c,d). Mutually exclusive. Similar length and granularity. No "All/None of the above".
-4) Exactly ONE correct option in "correct_option_ids".
-5) Keep language clear and concise. Prefer Grade-appropriate phrasing. Max ~280 chars for "stem" when reasonable.
-6) Math: use inline LaTeX for symbols, e.g., $\\frac{{3}}{{5}}$, $x^2$, $\\%$. Avoid display math.
-7) "canonical_solution": step-by-step reasoning to reach the correct answer; precise, mathematically accurate.
-8) "explanation": short, learner-friendly concept explanation (what idea this problem tests and why the correct option is right).
-9) "citations": reference the RAG context that inspired your approach. Format: [{{"chunk_id":"source_X","text":"Inspired by [concept/pattern] from this source"}}]. Do NOT quote verbatim.
-10) CREATE entirely original content - if RAG shows "solve 2x + 3 = 7", create something like "solve 4y - 5 = 11" or use completely different contexts.
-11) VERIFICATION STEP: After creating the question, solve it step-by-step to confirm your marked correct answer is actually correct.
+# Data hygiene & conflicts
+- If RAG contains any malformed lines or inconsistent math, IGNORE them and follow these rules.
+- Prefer short stems and clean integers/fractions to avoid arithmetic slop.
 
-# Quality Guidance for Original Content Creation
-- Align difficulty with the requested level by adjusting numbers and required steps (easy: direct recall/application; medium: 1–2 steps; hard: multi-step or subtle misconception).
-- Craft plausible distractors that reflect common misconceptions implied by the context, not random errors.
-- For numerical items, pick clean numbers consistent with the context; avoid awkward decimals unless the context uses them.
-- Prefer "why/what" stems over "which of the following is true" unless the context necessitates it.
+# Self-verification (do this before output)
+A) Solve your authored problem from scratch.
+B) Confirm the computed answer **exactly equals** one option’s "text".
+C) If mismatch, regenerate ONLY the options to include the correct answer exactly once.
+D) Ensure exactly one correct option remains.
 
-# Originality Requirements
-- INVENT new scenarios: If RAG shows "a store sells apples", create "a factory produces widgets" or "a school organizes events"
-- CHANGE numerical values: If RAG uses numbers like 5, 10, 15, use different values like 8, 12, 18
-- VARY contexts: If RAG focuses on geometry, use different shapes/measurements; if algebra, use different variables/equations
-- CREATE new names: Instead of copying "John" from RAG, use "Maria", "Ahmed", or "Chen"
-- ADAPT patterns: Learn the question structure from RAG, but apply it to completely new subject matter
+# Variety requirement
+Make your question obviously different in context/values/variables from any RAG example, while preserving the learning objective/pattern.
 
-# Variety Requirement
+# Dynamic Variety Instructions
 {variety_instruction}
 
-# Randomization Context
-Generation ID: {generation_id}
-Timestamp: {timestamp}
-Randomization Seed: {random_seed}
-
-# JSON Output Only (repeat: JSON only)
-Generate the question now and return ONLY the JSON object with these exact keys and constraints.
+# JSON only
+Return the JSON object only, no commentary or markdown.
         """)
     
     async def generate_question(self, spec: Dict[str, Any]) -> Dict[str, Any]:
@@ -399,7 +386,6 @@ Generate the question now and return ONLY the JSON object with these exact keys 
                     openai_api_key=self.llm.openai_api_key,
                     model_kwargs={
                         "response_format": {"type": "json_object"},
-                        "seed": None,
                         "user": f"gen_{trace_id}_{attempt}_{random.randint(1000, 9999)}"
                     }
                 )
@@ -410,18 +396,26 @@ Generate the question now and return ONLY the JSON object with these exact keys 
                 timestamp = str(int(time.time() * 1000))
                 generation_id = f"{trace_id}_{attempt}_{random.randint(1000, 9999)}"
                 
+                # Create the LangChain chain directly (don't pre-format)
                 chain = self.generation_prompt | unique_llm
-                response = await chain.ainvoke({
-                    "subject": spec["subject"],
-                    "topic": spec["topic"],
-                    "difficulty": spec["difficulty"],
-                    "question_type": spec["question_type"],
-                    "rag_context": rag_context["context_text"],
-                    "variety_instruction": variety_instruction,
-                    "generation_id": generation_id,
-                    "timestamp": timestamp,
-                    "random_seed": random_seed
-                })
+                try:
+                    response = await chain.ainvoke({
+                        "subject": spec.get("subject", ""),
+                        "topic": spec.get("topic", ""),
+                        "difficulty": spec.get("difficulty", ""),
+                        "question_type": spec.get("question_type", "multiple_choice"),
+                        "rag_context": rag_context.get("context_text", ""),
+                        "variety_instruction": variety_instruction or "",
+                        "generation_id": generation_id,
+                        "timestamp": timestamp,
+                        "random_seed": random_seed
+                    })
+                    logger.debug(f"✅ [Trace: {trace_id}] LLM chain invocation successful")
+                except Exception as llm_error:
+                    logger.error(f"❌ [Trace: {trace_id}] LLM chain invocation failed: {llm_error}")
+                    import traceback
+                    logger.error(f"📍 [Trace: {trace_id}] Chain invocation traceback:\n{traceback.format_exc()}")
+                    raise llm_error
                 
                 # Parse the response and check for duplicates
                 candidate_question = self._parse_llm_response(response.content, spec, rag_context)
@@ -449,7 +443,9 @@ Generate the question now and return ONLY the JSON object with these exact keys 
                     continue
             
             except Exception as e:
+                import traceback
                 logger.error(f"❌ [Trace: {trace_id}] LLM generation attempt {attempt + 1} failed: {e}")
+                logger.error(f"📍 [Trace: {trace_id}] Full traceback:\n{traceback.format_exc()}")
                 if attempt == max_attempts - 1:
                     logger.error(f"❌ [Trace: {trace_id}] All generation attempts failed")
                     return self._create_fallback_question(spec)
@@ -497,28 +493,106 @@ Generate the question now and return ONLY the JSON object with these exact keys 
                 question_data.get("canonicalSolution")
             )
             
+            # Safely parse options
+            try:
+                options_data = question_data.get("options", [])
+                parsed_options = []
+                for i, opt in enumerate(options_data):
+                    if isinstance(opt, dict) and "id" in opt and "text" in opt:
+                        parsed_options.append({"id": opt["id"], "text": opt["text"]})
+                    else:
+                        logger.warning(f"⚠️ Invalid option format at index {i}: {opt}")
+            except Exception as e:
+                logger.error(f"❌ Error parsing options: {e}")
+                parsed_options = []
+            
             question_candidate = QuestionCandidate(
                 stem=question_data.get("stem", ""),
-                options=[
-                    {"id": opt["id"], "text": opt["text"]}
-                    for opt in question_data.get("options", [])
-                ],
+                options=parsed_options,
                 correct_option_ids=correct_option_ids,
-                question_type=spec["question_type"],
+                question_type=spec.get("question_type", "multiple_choice"),
                 canonical_solution=canonical_solution,
                 explanation=question_data.get("explanation"),
                 citations=question_data.get("citations", []),
-                difficulty=spec["difficulty"],
-                tags=[spec["subject"], spec.get("topic", ""), spec["difficulty"]],
-                skill_ids=spec["skills"]
+                difficulty=spec.get("difficulty", ""),
+                tags=[spec.get("subject", ""), spec.get("topic", ""), spec.get("difficulty", "")],
+                skill_ids=spec.get("skills", [])
             )
             
             return question_candidate
             
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response: {e}")
-            logger.error(f"Raw response content: {response_content}")
+            logger.error(f"❌ JSON parsing failed: {e}")
+            logger.error(f"📄 Raw response content (first 500 chars): {response_content[:500]}")
+            
+            # Try to extract JSON from response if it has extra text
+            cleaned_response = self._extract_json_from_response(response_content)
+            if cleaned_response:
+                try:
+                    question_data = json.loads(cleaned_response)
+                    logger.info(f"✅ Recovered JSON after cleaning")
+                    # Continue with the same parsing logic...
+                    correct_option_ids = (
+                        question_data.get("correct_option_ids") or 
+                        question_data.get("correctOptionIds", [])
+                    )
+                    canonical_solution = (
+                        question_data.get("canonical_solution") or 
+                        question_data.get("canonicalSolution")
+                    )
+                    
+                    question_candidate = QuestionCandidate(
+                        stem=question_data.get("stem", ""),
+                        options=[
+                            {"id": opt["id"], "text": opt["text"]}
+                            for opt in question_data.get("options", [])
+                        ],
+                        correct_option_ids=correct_option_ids,
+                        question_type=spec["question_type"],
+                        canonical_solution=canonical_solution,
+                        explanation=question_data.get("explanation"),
+                        citations=question_data.get("citations", []),
+                        difficulty=spec.get("difficulty", ""),
+                        tags=[spec.get("subject", ""), spec.get("topic", ""), spec.get("difficulty", "")],
+                        skill_ids=spec.get("skills", [])
+                    )
+                    
+                    return question_candidate
+                except:
+                    pass
+            
             return self._create_fallback_question(spec)
+    
+    def _extract_json_from_response(self, response: str) -> str:
+        """Extract JSON object from LLM response that might have extra text"""
+        # Remove common prefixes and suffixes
+        response = response.strip()
+        
+        # Remove markdown code blocks
+        if response.startswith('```'):
+            lines = response.split('\n')
+            # Remove first and last lines if they're code block markers
+            if lines and lines[0].startswith('```'):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            response = '\n'.join(lines)
+        
+        # Find the JSON object boundaries
+        first_brace = response.find('{')
+        last_brace = response.rfind('}')
+        
+        if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
+            potential_json = response[first_brace:last_brace + 1]
+            
+            # Basic validation - count braces
+            open_braces = potential_json.count('{')
+            close_braces = potential_json.count('}')
+            
+            if open_braces == close_braces:
+                return potential_json
+        
+        return None
     
     async def _persistence_phase(self, question: QuestionCandidate, 
                                 validation_results: Dict[str, Any],
@@ -597,18 +671,95 @@ Generate the question now and return ONLY the JSON object with these exact keys 
             logger.error(f"❌ [Trace: {trace_id}] Persistence failed: {str(e)}")
             return {"status": "error", "error": str(e)}
     
+    def _sanitize_rag_content(self, content: str) -> str:
+        """Sanitize RAG content to remove problematic elements"""
+        if not content:
+            return ""
+        
+        # Remove display math environments that violate inline-only rule
+        import re
+        
+        # Remove \begin{align}...\end{align} blocks
+        content = re.sub(r'\\begin\{align\*?\}.*?\\end\{align\*?\}', '[DISPLAY_MATH_REMOVED]', content, flags=re.DOTALL)
+        
+        # Remove \[...\] display math
+        content = re.sub(r'\\\[.*?\\\]', '[DISPLAY_MATH_REMOVED]', content, flags=re.DOTALL)
+        
+        # Remove $$...$$ display math  
+        content = re.sub(r'\$\$.*?\$\$', '[DISPLAY_MATH_REMOVED]', content, flags=re.DOTALL)
+        
+        # Remove obvious truncation artifacts
+        truncation_patterns = [
+            r'Answer:\s*[^}]*\{[^}]*$',  # Truncated "Answer: 120a^{10" 
+            r'Solution[:\s]*.*\.\.\.\s*$',  # Truncated "Solution: ... -..."
+            r'We als\.\.\.\s*$',  # Truncated "We als..."
+            r'\.\.\.\s*-\s*\.\.\.\s*$',  # "... -..."
+            r'\.\.\.\s*$'  # Trailing "..."
+        ]
+        
+        for pattern in truncation_patterns:
+            content = re.sub(pattern, '[TRUNCATED_CONTENT_REMOVED]', content, flags=re.MULTILINE)
+        
+        # Remove malformed LaTeX (unclosed braces, etc.)
+        # Count braces and remove lines with mismatched braces
+        lines = content.split('\n')
+        clean_lines = []
+        for line in lines:
+            # Count braces in math expressions
+            math_parts = re.findall(r'\$[^$]*\$', line)
+            is_malformed = False
+            for math in math_parts:
+                if math.count('{') != math.count('}'):
+                    is_malformed = True
+                    break
+            
+            if not is_malformed:
+                clean_lines.append(line)
+            else:
+                clean_lines.append('[MALFORMED_MATH_REMOVED]')
+        
+        content = '\n'.join(clean_lines)
+        
+        # Remove empty placeholder lines
+        content = re.sub(r'\n\s*\[.*?_REMOVED\]\s*\n', '\n', content)
+        content = re.sub(r'^\s*\[.*?_REMOVED\]\s*\n', '', content)
+        content = re.sub(r'\n\s*\[.*?_REMOVED\]\s*$', '', content)
+        
+        # Clean up excessive whitespace
+        content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
+        content = content.strip()
+        
+        return content
+
     def _format_rag_context(self, chunks: List[Dict]) -> str:
-        """Format RAG chunks for LLM prompt"""
+        """Format RAG chunks for LLM prompt with sanitization"""
         if not chunks:
             return "No specific context available."
         
         formatted = []
         for i, chunk in enumerate(chunks[:3], 1):  # Use top 3 chunks
             content = chunk.get('text', '') if isinstance(chunk, dict) else str(chunk)
+            
+            # Sanitize content first
+            original_content = content
+            content = self._sanitize_rag_content(content)
+            
+            # Log if significant changes were made
+            if len(original_content) - len(content) > 50:
+                logger.info(f"🧹 [Trace: {i}] RAG content sanitized: removed {len(original_content) - len(content)} characters")
+            
+            # Skip empty/useless content after sanitization
+            if not content or len(content.strip()) < 20:
+                logger.warning(f"⚠️ [Trace: {i}] RAG chunk {i} discarded after sanitization (too short/empty)")
+                continue
+                
             # Truncate very long content
             content = content[:400] + "..." if len(content) > 400 else content
             formatted.append(f"Context {i}: {content}")
         
+        if not formatted:
+            return "No usable context available after sanitization."
+            
         return "\\n\\n".join(formatted)
     
     def _create_fallback_question(self, spec: Dict[str, Any]) -> QuestionCandidate:
